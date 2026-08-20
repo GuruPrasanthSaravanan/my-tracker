@@ -1,20 +1,31 @@
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
+import BottomNav from './BottomNav';
+import CashBookPage from '../pages/CashBookPage';
+import VendorsPage from '../pages/VendorsPage';
 
 export default function Layout() {
   const { user, signOut } = useAuth();
 
   return (
-    <div className="min-h-screen pb-16">
-      <header className="bg-white border-b px-4 py-3 flex items-center justify-between">
-        <h1 className="font-bold text-lg">MyTracker</h1>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <header className="bg-white border-b px-4 py-3 flex items-center justify-between sticky top-0 z-20">
+        <h1 className="font-bold text-lg text-primary">MyTracker</h1>
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-500">{user?.name}</span>
-          <button onClick={signOut} className="text-xs text-red-500">Sign out</button>
+          {user?.picture && <img src={user.picture} className="w-6 h-6 rounded-full" alt="" />}
+          <button onClick={signOut} className="text-xs text-gray-400">Sign out</button>
         </div>
       </header>
-      <main className="p-4">
-        <p className="text-gray-500">Signed in! Pages coming next...</p>
+      <main className="px-4 pt-4">
+        <Routes>
+          <Route path="/" element={<Navigate to="/cashbook" replace />} />
+          <Route path="/cashbook" element={<CashBookPage />} />
+          <Route path="/vendors" element={<VendorsPage />} />
+          <Route path="/dashboard" element={<div className="text-gray-400 text-center py-8">Dashboard - Phase 2</div>} />
+          <Route path="/more" element={<div className="text-gray-400 text-center py-8">More - Phase 2</div>} />
+        </Routes>
       </main>
+      <BottomNav />
     </div>
   );
 }
