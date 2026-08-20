@@ -124,8 +124,6 @@ export function useDebts() {
     await fetchData();
   }, [token, fetchData, payoffIndexMap]);
 
-  const progress = computeDebtProgress(debtRows);
-
   const paidByDebt = {};
   for (const p of payoffRows) {
     paidByDebt[p.debtName] = (paidByDebt[p.debtName] || 0) + p.payment;
@@ -134,10 +132,31 @@ export function useDebts() {
   const debts = debtRows.filter((r) => (r[6] || '').toLowerCase() !== 'lent');
   const lends = debtRows.filter((r) => (r[6] || '').toLowerCase() === 'lent');
 
+  // Blend Status-based "Cleared" debts with partial/full payments toward Active debts,
+  // so the progress bar reflects real payments even before a debt is manually marked Cleared.
+  const progress = computeDebtProgress(debts);
+  let paymentAdjustedCleared = 0;
+  for (const r of debts) {
+    const status = (r[6] || '').toLowerCase();
+    if (status === 'cleared') continue; // already counted in progress.totalCleared
+    const name = r[1] || '';
+    const amount = parseFloat(r[2]) || 0;
+    const paid = paidByDebt[name] || 0;
+    paymentAdjustedCleared += Math.min(paid, amount);
+  }
+  const totalCleared = progress.totalCleared + paymentAdjustedCleared;
+  const percentCleared = progress.totalOriginal > 0 ? (totalCleared / progress.totalOriginal) * 100 : 0;
+  // Exclude debts that are fully paid off (even if Status still says Active) from the "attacking" list
+  const activeDebts = progress.activeDebts.filter((d) => {
+    const paid = paidByDebt[d.name] || 0;
+    return paid < d.originalAmount;
+  });
+  const adjustedProgress = { ...progress, totalCleared, percentCleared, activeDebts };
+
   return {
     debtRows, debts, lends, payoffRows, isLoading,
     addDebt, editDebt, addPayment, editPayment, deletePayment,
-    refresh: fetchData, progress, paidByDebt,
+    refresh: fetchData, progress: adjustedProgress, paidByDebt,
     _debtIndexOf: (row) => debtRows.indexOf(row),
     _paymentIndexOf: (payoffRow) => payoffRows.indexOf(payoffRow),
   };
