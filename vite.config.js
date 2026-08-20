@@ -26,6 +26,35 @@ export default defineConfig({
     }),
   ],
   base: '/my-tracker/',
+  server: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'unsafe-none',
+    },
+    // Serve an OAuth callback page at the root for local dev
+    // Google OAuth implicit flow on localhost only allows bare origin as redirect URI
+    plugins: [
+      {
+        name: 'oauth-root-redirect',
+        configureServer(server) {
+          server.middlewares.use((req, res, next) => {
+            if (req.url === '/' || req.url === '/index.html') {
+              res.setHeader('Content-Type', 'text/html');
+              res.end(`<!DOCTYPE html><html><head><script>
+                // If there's a hash with access_token, forward it to the app
+                if (window.location.hash && window.location.hash.includes('access_token')) {
+                  window.location.href = '/my-tracker/' + window.location.hash;
+                } else {
+                  window.location.href = '/my-tracker/';
+                }
+              </script></head><body>Redirecting...</body></html>`);
+              return;
+            }
+            next();
+          });
+        },
+      },
+    ],
+  },
   test: {
     globals: true,
     environment: 'jsdom',
