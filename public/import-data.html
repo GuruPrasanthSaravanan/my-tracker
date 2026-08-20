@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyTracker - Import Initial Data</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+    button { padding: 12px 24px; font-size: 16px; cursor: pointer; border: none; border-radius: 8px; margin: 4px; }
+    .primary { background: #2563eb; color: white; }
+    .success { background: #16a34a; color: white; }
+    .danger { background: #dc2626; color: white; }
+    pre { background: #f3f4f6; padding: 12px; border-radius: 8px; overflow-x: auto; font-size: 12px; max-height: 300px; overflow-y: auto; }
+    .status { margin: 8px 0; padding: 8px; border-radius: 4px; }
+    .status.ok { background: #dcfce7; color: #166534; }
+    .status.err { background: #fee2e2; color: #991b1b; }
+    .status.info { background: #dbeafe; color: #1e40af; }
+  </style>
+</head>
+<body>
+  <h1>MyTracker - Import Initial Data</h1>
+  <p>This will populate your Google Sheet with starting data from your raw inputs.</p>
+
+  <div id="auth-section" style="display:none">
+    <p style="color:#991b1b">Not signed in. Please sign in to <a href="/my-tracker/">MyTracker</a> first, then come back here.</p>
+  </div>
+
+  <div id="import-section">
+    <p>Choose what to import:</p>
+    <button class="primary" onclick="importAll()">Import ALL Data</button>
+    <hr style="margin:16px 0">
+    <button class="success" onclick="importLists()">1. Import Lists</button>
+    <button class="success" onclick="importDebts()">2. Import Debts</button>
+    <button class="success" onclick="importProjects()">3. Import Projects</button>
+  </div>
+
+  <div id="log"></div>
+
+  <script>
+    const CLIENT_ID = '550408273851-444qr642plu6a261m90culgd8cfj6ccb.apps.googleusercontent.com';
+    const SHEET_ID = '1UGoYTp9q-OGSlY7fWYZpiPyo36KulHEh3V39qxa405c';
+    const SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
+    let token = null;
+
+    function log(msg, type = 'info') {
+      const el = document.getElementById('log');
+      el.innerHTML += `<div class="status ${type}">${msg}</div>`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    // Reuse token from main app's sessionStorage
+    window.addEventListener('load', () => {
+      token = sessionStorage.getItem('auth_token');
+      if (token) {
+        document.getElementById('auth-section').style.display = 'none';
+        document.getElementById('import-section').style.display = 'block';
+        log('Using existing session token from MyTracker.', 'ok');
+      } else {
+        document.getElementById('auth-section').style.display = 'block';
+        document.getElementById('import-section').style.display = 'none';
+      }
+    });
+
+    async function appendRows(range, values) {
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error?.message || `API error ${res.status}`);
+      }
+      return res.json();
+    }
+
+    async function importLists() {
+      log('Importing Lists tab...', 'info');
+      try {
+        // Build lists - each column is independent, pad to max length
+        const accounts = ['ICICI', 'HDFC', 'IDFC', 'Kotak', 'RBL', 'Axis', 'CASH', 'UPI', 'W-ICICI', 'W-HDFC', 'W-Axis', 'W-Kotak', 'W-BOB', 'HDFC-CC', 'ICICI-CC-Rupay', 'ICICI-CC-Amazon'];
+        const types = ['SALARY', 'LOAN', 'EMI', 'FAMILY', 'VENDOR', 'PROJECT', 'DEBT', 'CC', 'TRANSFER', 'CHIT', 'BONUS', 'LEND', 'GIFT', 'BILLS', 'LAND-IN', 'LAND-OUT', 'INVEST-IN', 'INVEST-OUT', 'HOUSE', 'CHILD', 'WANT', 'FESTIVAL', 'PARENTS', 'OTHER'];
+        const vendors = ['Raju', 'Sri Lakshmi', 'Ganesh Bricks', 'Sharma', 'JCB Suresh', 'Dad (Project)', 'Mom', 'MIL', 'Electrician', 'Plumber', 'Carpenter', 'Mason', 'Painter'];
+        const projects = ['Constr', 'Reno', 'Land-Regn', 'Car', 'Land-Plant'];
+        const milestoneStatuses = ['Not Started', 'In Progress', 'Done', 'Delayed', 'Cancelled'];
+
+        const maxLen = Math.max(accounts.length, types.length, vendors.length, projects.length, milestoneStatuses.length);
+        const rows = [];
+        for (let i = 0; i < maxLen; i++) {
+          rows.push([
+            accounts[i] || '',
+            types[i] || '',
+            vendors[i] || '',
+            projects[i] || '',
+            milestoneStatuses[i] || '',
+          ]);
+        }
+
+        await appendRows('Lists!A2:E', rows);
+        log(`Lists: ${rows.length} rows imported (${accounts.length} accounts, ${types.length} types, ${vendors.length} vendors, ${projects.length} projects)`, 'ok');
+      } catch (e) {
+        log(`Lists import failed: ${e.message}`, 'err');
+      }
+    }
+
+    async function importDebts() {
+      log('Importing Debts tab...', 'info');
+      try {
+        const debtRows = [
+          // [Priority, DebtName, OriginalAmount, InterestRate, TargetClearDate, DebitsFrom, Status]
+          ['1', 'Friend\'s Loan (0%)', '300000', '0', 'Aug 2028', 'CASH', 'Active'],
+          ['2', 'Credit Card Bill', '50000', '0', 'Sep 2026', 'Axis', 'Active'],
+          ['3', 'Gold Loan', '250000', '9', 'Aug 2027', 'CASH', 'Active'],
+          ['4', 'Personal Loan (12%)', '100000', '12', 'Aug 2027', 'CASH', 'Active'],
+          ['5', 'Land Loan EMI', '', '14', 'Jun 2029', 'HDFC', 'Active'],
+          ['6', 'Personal Loan EMI', '', '10.5', '2030', 'HDFC', 'Active'],
+          ['7', 'Wife Loan 1 EMI', '', '10.5', 'Oct 2028', 'W-HDFC', 'Active'],
+          ['8', 'Wife Loan 2 EMI', '', '10.5', '2031', 'W-HDFC', 'Active'],
+          ['9', 'Car Loan (planned)', '2230000', '7.6', 'Aug 2033', 'HDFC', 'Active'],
+        ];
+
+        await appendRows('Debts!A2:G', debtRows);
+        log(`Debts: ${debtRows.length} debts imported`, 'ok');
+      } catch (e) {
+        log(`Debts import failed: ${e.message}`, 'err');
+      }
+    }
+
+    async function importProjects() {
+      log('Importing Projects tab...', 'info');
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const in3months = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const in1week = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+        const projectRows = [
+          // [Code, Name, Budget, EstLabour, EstMaterial, EstMachine, EstOther, StartDate, EndDatePlanned, EndDateActual, Manager, Status, Notes]
+          ['Constr', 'House Construction', '255000', '', '', '', '', today, in3months, '', 'Self', 'In Progress', 'Ongoing construction - approx 255k remaining'],
+          ['Reno', 'House Renovation', '100000', '', '', '', '', today, in3months, '', 'Self', 'Not Started', 'Renovation work - approx 100k'],
+          ['Car', 'Car Purchase', '250000', '', '', '', '', today, in1week, '', 'Self', 'In Progress', 'Down payment 250k, loan 22.3L @ 7.6%, EMI 33k/month'],
+          ['Land-Regn', 'Land Registration', '150000', '', '', '', '', today, in3months, '', 'Self', 'Not Started', 'Registration costs approx 150k'],
+          ['Land-Plant', 'Land Planting', '250000', '', '', '', '', today, in3months, '', 'Self', 'Not Started', 'Planting costs approx 250k'],
+        ];
+
+        await appendRows('Projects!A2:M', projectRows);
+        log(`Projects: ${projectRows.length} projects imported`, 'ok');
+      } catch (e) {
+        log(`Projects import failed: ${e.message}`, 'err');
+      }
+    }
+
+    async function importAll() {
+      log('=== Starting full import ===', 'info');
+      await importLists();
+      await importDebts();
+      await importProjects();
+      log('=== Import complete! ===', 'ok');
+      log('You can now close this page and refresh MyTracker.', 'info');
+    }
+  </script>
+</body>
+</html>

@@ -42,3 +42,42 @@ export async function appendRow(token, range, values) {
     throw new Error(error.error?.message || `Sheets API error: ${res.status}`);
   }
 }
+
+/**
+ * Update a specific row in the spreadsheet.
+ * @param {string} token - OAuth access token
+ * @param {string} range - e.g., "CashBook!A5:F5" (specific row)
+ * @param {string[]} values - row values to write
+ */
+export async function updateRow(token, range, values) {
+  const url = `${BASE_URL}/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`;
+  const res = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ values: [values] }),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.error?.message || `Sheets API error: ${res.status}`);
+  }
+}
+
+/**
+ * Clear a specific row (effectively deleting it visually).
+ * @param {string} token - OAuth access token
+ * @param {string} range - e.g., "CashBook!A5:F5"
+ */
+export async function clearRow(token, range) {
+  const url = `${BASE_URL}/${SPREADSHEET_ID}/values/${encodeURIComponent(range)}:clear`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({}));
+    throw new Error(error.error?.message || `Sheets API error: ${res.status}`);
+  }
+}

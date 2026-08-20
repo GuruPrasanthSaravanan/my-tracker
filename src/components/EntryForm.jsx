@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { X } from 'lucide-react';
+import { X, Trash2 } from 'lucide-react';
 import Dropdown from './Dropdown';
 
 const titles = {
-  cashbook: 'New CashBook Entry',
-  vendors: 'New Vendor Entry',
-  project: 'New Project',
-  milestone: 'New Milestone',
-  'debt-payment': 'Record Debt Payment',
+  cashbook: 'CashBook Entry',
+  vendors: 'Vendor Entry',
+  project: 'Project',
+  milestone: 'Milestone',
+  'debt-payment': 'Debt Payment',
 };
 
 const placeholders = {
@@ -21,9 +21,9 @@ const placeholders = {
 const showDirection = { cashbook: true, vendors: true };
 const showAmount = { cashbook: true, vendors: true, project: true, 'debt-payment': true };
 
-export default function EntryForm({ type, lists, onSave, onClose }) {
+export default function EntryForm({ type, lists, onSave, onClose, initialData, onDelete, isEditing }) {
   const today = new Date().toISOString().split('T')[0];
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(initialData || {
     date: today,
     description: '',
     account: '',
@@ -33,6 +33,7 @@ export default function EntryForm({ type, lists, onSave, onClose }) {
     amount: '',
     direction: 'out',
   });
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const set = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
@@ -91,7 +92,7 @@ export default function EntryForm({ type, lists, onSave, onClose }) {
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end">
       <div className="bg-white w-full rounded-t-2xl p-4 pb-8 max-h-[85vh] overflow-auto">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold">{titles[type] || 'New Entry'}</h2>
+          <h2 className="text-lg font-bold">{isEditing ? 'Edit' : 'New'} {titles[type] || 'Entry'}</h2>
           <button onClick={onClose} className="p-1"><X size={20} /></button>
         </div>
 
@@ -165,8 +166,28 @@ export default function EntryForm({ type, lists, onSave, onClose }) {
 
           <button onClick={handleSubmit}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-lg active:scale-98 transition mt-2">
-            Save
+            {isEditing ? 'Update' : 'Save'}
           </button>
+
+          {isEditing && onDelete && (
+            confirmDelete ? (
+              <div className="flex gap-2">
+                <button onClick={onDelete}
+                  className="flex-1 bg-danger text-white py-3 rounded-xl font-semibold text-sm">
+                  Confirm Delete
+                </button>
+                <button onClick={() => setConfirmDelete(false)}
+                  className="flex-1 bg-gray-100 text-gray-600 py-3 rounded-xl font-semibold text-sm">
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button onClick={() => setConfirmDelete(true)}
+                className="w-full flex items-center justify-center gap-2 text-danger py-2 text-sm">
+                <Trash2 size={16} /> Delete this entry
+              </button>
+            )
+          )}
         </div>
       </div>
     </div>

@@ -10,9 +10,10 @@ import EntryForm from '../components/EntryForm';
 import { formatCurrency } from '../utils/formatters';
 
 export default function CashBookPage() {
-  const { rows, isLoading, addEntry, totalBalance, accountBalances } = useCashBook();
+  const { rows, isLoading, addEntry, editEntry, deleteEntry, totalBalance, accountBalances } = useCashBook();
   const { lists } = useLists();
   const [showForm, setShowForm] = useState(false);
+  const [editingRow, setEditingRow] = useState(null); // { index, data }
   const [toast, setToast] = useState(null);
 
   const handleSave = async (entry) => {
@@ -23,6 +24,41 @@ export default function CashBookPage() {
     } catch {
       setToast({ message: 'Failed to save. Check internet.', type: 'error' });
     }
+  };
+
+  const handleEdit = async (entry) => {
+    try {
+      await editEntry(editingRow.index, entry);
+      setEditingRow(null);
+      setToast({ message: 'Entry updated!', type: 'success' });
+    } catch {
+      setToast({ message: 'Failed to update.', type: 'error' });
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteEntry(editingRow.index);
+      setEditingRow(null);
+      setToast({ message: 'Entry deleted.', type: 'success' });
+    } catch {
+      setToast({ message: 'Failed to delete.', type: 'error' });
+    }
+  };
+
+  const openEdit = (originalIndex, row) => {
+    const moneyIn = parseFloat(row[4]) || 0;
+    setEditingRow({
+      index: originalIndex,
+      data: {
+        date: row[0] || '',
+        description: row[1] || '',
+        account: row[2] || '',
+        type: row[3] || '',
+        amount: String(moneyIn || parseFloat(row[5]) || ''),
+        direction: moneyIn ? 'in' : 'out',
+      },
+    });
   };
 
   return (
@@ -60,15 +96,16 @@ export default function CashBookPage() {
         ) : rows.length === 0 ? (
           <p className="text-center text-gray-400 py-8">No entries yet. Tap + to add one.</p>
         ) : (
-          [...rows].reverse().map((row, i) => (
-            <TransactionRow
-              key={i}
-              date={row[0]}
-              description={row[1]}
-              badge={row[2]}
-              amount={parseFloat(row[4]) || parseFloat(row[5]) || 0}
-              isIncome={!!parseFloat(row[4])}
-            />
+          [...rows].map((row, i) => [row, i]).reverse().map(([row, originalIndex]) => (
+            <div key={originalIndex} onClick={() => openEdit(originalIndex, row)} className="cursor-pointer">
+              <TransactionRow
+                date={row[0]}
+                description={row[1]}
+                badge={row[2]}
+                amount={parseFloat(row[4]) || parseFloat(row[5]) || 0}
+                isIncome={!!parseFloat(row[4])}
+              />
+            </div>
           ))
         )}
       </div>
@@ -81,6 +118,18 @@ export default function CashBookPage() {
           lists={lists}
           onSave={handleSave}
           onClose={() => setShowForm(false)}
+        />
+      )}
+
+      {editingRow && (
+        <EntryForm
+          type="cashbook"
+          lists={lists}
+          isEditing
+          initialData={editingRow.data}
+          onSave={handleEdit}
+          onDelete={handleDelete}
+          onClose={() => setEditingRow(null)}
         />
       )}
 

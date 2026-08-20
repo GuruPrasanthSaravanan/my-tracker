@@ -10,9 +10,10 @@ import EntryForm from '../components/EntryForm';
 import { formatCurrency } from '../utils/formatters';
 
 export default function VendorsPage() {
-  const { rows, isLoading, addEntry, totalOwed, vendorBalances, projectBills } = useVendors();
+  const { rows, isLoading, addEntry, editEntry, deleteEntry, totalOwed, vendorBalances, projectBills } = useVendors();
   const { lists } = useLists();
   const [showForm, setShowForm] = useState(false);
+  const [editingRow, setEditingRow] = useState(null);
   const [filterVendor, setFilterVendor] = useState(null);
   const [toast, setToast] = useState(null);
 
@@ -26,9 +27,46 @@ export default function VendorsPage() {
     }
   };
 
+  const handleEdit = async (entry) => {
+    try {
+      await editEntry(editingRow.index, entry);
+      setEditingRow(null);
+      setToast({ message: 'Entry updated!', type: 'success' });
+    } catch {
+      setToast({ message: 'Failed to update.', type: 'error' });
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      await deleteEntry(editingRow.index);
+      setEditingRow(null);
+      setToast({ message: 'Entry deleted.', type: 'success' });
+    } catch {
+      setToast({ message: 'Failed to delete.', type: 'error' });
+    }
+  };
+
+  const openEdit = (originalIndex, row) => {
+    const bill = parseFloat(row[4]) || 0;
+    setEditingRow({
+      index: originalIndex,
+      data: {
+        date: row[0] || '',
+        vendor: row[1] || '',
+        description: row[2] || '',
+        project: row[3] || '',
+        amount: String(bill || parseFloat(row[5]) || ''),
+        direction: bill ? 'in' : 'out',
+      },
+    });
+  };
+
+  // Build indexed rows for filtering while preserving original indices
+  const indexedRows = rows.map((row, i) => ({ row, originalIndex: i }));
   const filteredRows = filterVendor
-    ? rows.filter((row) => row[1] === filterVendor)
-    : rows;
+    ? indexedRows.filter(({ row }) => row[1] === filterVendor)
+    : indexedRows;
 
   return (
     <div>
@@ -89,15 +127,16 @@ export default function VendorsPage() {
         ) : filteredRows.length === 0 ? (
           <p className="text-center text-gray-400 py-8">No entries yet. Tap + to add one.</p>
         ) : (
-          [...filteredRows].reverse().map((row, i) => (
-            <TransactionRow
-              key={i}
-              date={row[0]}
-              description={`${row[1]} - ${row[2]}`}
-              badge={row[3]}
-              amount={parseFloat(row[4]) || parseFloat(row[5]) || 0}
-              isIncome={!!parseFloat(row[4])}
-            />
+          [...filteredRows].reverse().map(({ row, originalIndex }) => (
+            <div key={originalIndex} onClick={() => openEdit(originalIndex, row)} className="cursor-pointer">
+              <TransactionRow
+                date={row[0]}
+                description={`${row[1]} - ${row[2]}`}
+                badge={row[3]}
+                amount={parseFloat(row[4]) || parseFloat(row[5]) || 0}
+                isIncome={!!parseFloat(row[4])}
+              />
+            </div>
           ))
         )}
       </div>
@@ -110,6 +149,18 @@ export default function VendorsPage() {
           lists={lists}
           onSave={handleSave}
           onClose={() => setShowForm(false)}
+        />
+      )}
+
+      {editingRow && (
+        <EntryForm
+          type="vendors"
+          lists={lists}
+          isEditing
+          initialData={editingRow.data}
+          onSave={handleEdit}
+          onDelete={handleDelete}
+          onClose={() => setEditingRow(null)}
         />
       )}
 

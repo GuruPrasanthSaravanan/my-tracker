@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
-import { readSheet, appendRow } from '../api/sheets';
+import { readSheet, appendRow, updateRow, clearRow } from '../api/sheets';
 import { computeVendorBalances, sumByField } from '../utils/aggregations';
 
 export function useVendors() {
@@ -25,22 +25,33 @@ export function useVendors() {
 
   const addEntry = useCallback(async (entry) => {
     const values = [
-      entry.date,
-      entry.vendor,
-      entry.description,
-      entry.project,
-      entry.bill || '',
-      entry.paid || '',
+      entry.date, entry.vendor, entry.description, entry.project,
+      entry.bill || '', entry.paid || '',
     ];
     await appendRow(token, 'Vendors!A:F', values);
+    await fetchData();
+  }, [token, fetchData]);
+
+  const editEntry = useCallback(async (rowIndex, entry) => {
+    const sheetRow = rowIndex + 2;
+    const values = [
+      entry.date, entry.vendor, entry.description, entry.project,
+      entry.bill || '', entry.paid || '',
+    ];
+    await updateRow(token, `Vendors!A${sheetRow}:F${sheetRow}`, values);
+    await fetchData();
+  }, [token, fetchData]);
+
+  const deleteEntry = useCallback(async (rowIndex) => {
+    const sheetRow = rowIndex + 2;
+    await clearRow(token, `Vendors!A${sheetRow}:F${sheetRow}`);
     await fetchData();
   }, [token, fetchData]);
 
   const vendorBalances = computeVendorBalances(rows);
   const projectBills = sumByField(rows, 3, 4);
   const projectPaid = sumByField(rows, 3, 5);
-
   const totalOwed = Array.from(vendorBalances.values()).reduce((sum, val) => sum + val, 0);
 
-  return { rows, isLoading, addEntry, refresh: fetchData, vendorBalances, projectBills, projectPaid, totalOwed };
+  return { rows, isLoading, addEntry, editEntry, deleteEntry, refresh: fetchData, vendorBalances, projectBills, projectPaid, totalOwed };
 }
