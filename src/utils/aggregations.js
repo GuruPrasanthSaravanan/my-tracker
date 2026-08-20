@@ -47,3 +47,51 @@ export function computeAccountBalances(rows) {
   }
   return result;
 }
+
+/**
+ * Sum all bills for a specific project from vendor rows.
+ * @param {string[][]} rows - Vendors tab rows [Date, Vendor, Desc, Project, Bill, Paid]
+ * @param {string} projectCode - Project code to filter by
+ * @returns {number}
+ */
+export function computeProjectSpent(rows, projectCode) {
+  let total = 0;
+  for (const row of rows) {
+    if (row[3] === projectCode) {
+      total += parseFloat(row[4]) || 0;
+    }
+  }
+  return total;
+}
+
+/**
+ * Calculate overall debt progress.
+ * @param {string[][]} rows - Debts tab rows [Priority, Name, Original, Rate, Target, DebitsFrom, Status]
+ * @returns {{ totalOriginal: number, totalCleared: number, percentCleared: number, activeDebts: object[] }}
+ */
+export function computeDebtProgress(rows) {
+  let totalOriginal = 0;
+  let totalCleared = 0;
+  const activeDebts = [];
+
+  for (const row of rows) {
+    const amount = parseFloat(row[2]) || 0;
+    totalOriginal += amount;
+    if ((row[6] || '').toLowerCase() === 'cleared') {
+      totalCleared += amount;
+    } else {
+      activeDebts.push({
+        priority: parseInt(row[0]) || 0,
+        name: row[1] || '',
+        originalAmount: amount,
+        interestRate: parseFloat(row[3]) || 0,
+        targetDate: row[4] || '',
+        debitsFrom: row[5] || '',
+        status: row[6] || 'Active',
+      });
+    }
+  }
+
+  const percentCleared = totalOriginal > 0 ? (totalCleared / totalOriginal) * 100 : 0;
+  return { totalOriginal, totalCleared, percentCleared, activeDebts };
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sumByField, computeVendorBalances, computeAccountBalances } from '../../src/utils/aggregations';
+import { sumByField, computeVendorBalances, computeAccountBalances, computeProjectSpent, computeDebtProgress } from '../../src/utils/aggregations';
 
 describe('sumByField', () => {
   it('sums values grouped by a field', () => {
@@ -37,5 +37,34 @@ describe('computeAccountBalances', () => {
     const result = computeAccountBalances(rows);
     expect(result.get('ICICI')).toBe(142000); // 153000 - 11000
     expect(result.get('HDFC')).toBe(-31000); // 0 - 31000
+  });
+});
+
+describe('computeProjectSpent', () => {
+  it('sums bills for a specific project from vendor rows', () => {
+    const vendorRows = [
+      ['1-Sep', 'Raju', 'Cement', 'Constr', '18000', ''],
+      ['1-Sep', 'Ganesh', 'Bricks', 'Constr', '25000', ''],
+      ['2-Sep', 'Sharma', 'Paint', 'Reno', '12000', ''],
+      ['3-Sep', 'Raju', 'Labour', 'Constr', '30000', ''],
+    ];
+    expect(computeProjectSpent(vendorRows, 'Constr')).toBe(73000);
+    expect(computeProjectSpent(vendorRows, 'Reno')).toBe(12000);
+    expect(computeProjectSpent(vendorRows, 'Land')).toBe(0);
+  });
+});
+
+describe('computeDebtProgress', () => {
+  it('calculates overall debt progress', () => {
+    const debtRows = [
+      ['1', 'Home Loan', '5000000', '8.5', 'Dec 2029', 'HDFC', 'Active'],
+      ['2', 'Car Loan', '800000', '9', 'Mar 2028', 'ICICI', 'Active'],
+      ['3', 'Friend Loan', '200000', '0', 'Sep 2027', 'CASH', 'Cleared'],
+    ];
+    const result = computeDebtProgress(debtRows);
+    expect(result.totalOriginal).toBe(6000000);
+    expect(result.totalCleared).toBe(200000);
+    expect(result.percentCleared).toBeCloseTo(3.33, 1);
+    expect(result.activeDebts).toHaveLength(2);
   });
 });
