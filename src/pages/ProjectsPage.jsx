@@ -12,11 +12,11 @@ import EntryForm from '../components/EntryForm';
 import { formatCurrency } from '../utils/formatters';
 
 export default function ProjectsPage() {
-  const { projects, milestones, isLoading, addProject, addMilestone } = useProjects();
-  const { rows: vendorRows } = useVendors();
+  const { projects, milestones, isLoading, addProject, editProject, addMilestone, refresh: refreshProjects } = useProjects();
+  const { rows: vendorRows, addEntry: addVendorEntry, refresh: refreshVendors } = useVendors();
   const { lists } = useLists();
   const [selectedProject, setSelectedProject] = useState(null);
-  const [showForm, setShowForm] = useState(null);
+  const [showForm, setShowForm] = useState(null); // null | 'project' | 'milestone' | 'expense'
   const [toast, setToast] = useState(null);
 
   const handleSaveProject = async (entry) => {
@@ -29,11 +29,37 @@ export default function ProjectsPage() {
     }
   };
 
+  const handleEditProject = async (entry) => {
+    try {
+      await editProject(selectedProject._rowIndex, entry);
+      // Refresh selectedProject with updated data
+      setSelectedProject(null);
+      setToast({ message: 'Project updated!', type: 'success' });
+    } catch {
+      setToast({ message: 'Failed to update.', type: 'error' });
+    }
+  };
+
   const handleSaveMilestone = async (entry) => {
     try {
       await addMilestone({ ...entry, project: selectedProject?.code });
       setShowForm(null);
+      await refreshProjects();
       setToast({ message: 'Milestone saved!', type: 'success' });
+    } catch {
+      setToast({ message: 'Failed to save.', type: 'error' });
+    }
+  };
+
+  const handleSaveExpense = async (entry) => {
+    try {
+      await addVendorEntry({
+        ...entry,
+        project: selectedProject?.code,
+      });
+      setShowForm(null);
+      await refreshVendors();
+      setToast({ message: 'Expense saved!', type: 'success' });
     } catch {
       setToast({ message: 'Failed to save.', type: 'error' });
     }
@@ -74,13 +100,15 @@ export default function ProjectsPage() {
 
       <FAB onClick={() => setShowForm('project')} />
 
-      {selectedProject && (
+      {selectedProject && !showForm && (
         <ProjectDetail
           project={selectedProject}
           spent={computeProjectSpent(vendorRows, selectedProject.code)}
           milestones={milestones}
           vendorRows={vendorRows}
           onAddMilestone={() => setShowForm('milestone')}
+          onAddExpense={() => setShowForm('expense')}
+          onEditProject={handleEditProject}
           onClose={() => setSelectedProject(null)}
         />
       )}
@@ -99,6 +127,23 @@ export default function ProjectsPage() {
           type="milestone"
           lists={lists}
           onSave={handleSaveMilestone}
+          onClose={() => setShowForm(null)}
+        />
+      )}
+
+      {showForm === 'expense' && (
+        <EntryForm
+          type="vendors"
+          lists={lists}
+          initialData={{
+            date: new Date().toISOString().split('T')[0],
+            vendor: '',
+            description: '',
+            project: selectedProject?.code || '',
+            amount: '',
+            direction: 'in',
+          }}
+          onSave={handleSaveExpense}
           onClose={() => setShowForm(null)}
         />
       )}

@@ -96,8 +96,11 @@ export default function CashBookPage() {
         ) : rows.length === 0 ? (
           <p className="text-center text-gray-400 py-8">No entries yet. Tap + to add one.</p>
         ) : (
-          [...rows].map((row, i) => [row, i]).reverse().map(([row, originalIndex]) => (
-            <div key={originalIndex} onClick={() => openEdit(originalIndex, row)} className="cursor-pointer">
+          [...rows].map((row, i) => [row, i]).reverse()
+            .filter(([row]) => row[0] || row[1] || row[4] || row[5]) // skip cleared rows
+            .map(([row, originalIndex]) => (
+            <button key={originalIndex} onClick={() => openEdit(originalIndex, row)}
+              className="w-full text-left active:bg-gray-50 transition">
               <TransactionRow
                 date={row[0]}
                 description={row[1]}
@@ -105,7 +108,7 @@ export default function CashBookPage() {
                 amount={parseFloat(row[4]) || parseFloat(row[5]) || 0}
                 isIncome={!!parseFloat(row[4])}
               />
-            </div>
+            </button>
           ))
         )}
       </div>

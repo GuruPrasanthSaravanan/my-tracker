@@ -127,8 +127,11 @@ export default function VendorsPage() {
         ) : filteredRows.length === 0 ? (
           <p className="text-center text-gray-400 py-8">No entries yet. Tap + to add one.</p>
         ) : (
-          [...filteredRows].reverse().map(({ row, originalIndex }) => (
-            <div key={originalIndex} onClick={() => openEdit(originalIndex, row)} className="cursor-pointer">
+          [...filteredRows].reverse()
+            .filter(({ row }) => row[0] || row[1] || row[4] || row[5]) // skip cleared rows
+            .map(({ row, originalIndex }) => (
+            <button key={originalIndex} onClick={() => openEdit(originalIndex, row)}
+              className="w-full text-left active:bg-gray-50 transition">
               <TransactionRow
                 date={row[0]}
                 description={`${row[1]} - ${row[2]}`}
@@ -136,7 +139,7 @@ export default function VendorsPage() {
                 amount={parseFloat(row[4]) || parseFloat(row[5]) || 0}
                 isIncome={!!parseFloat(row[4])}
               />
-            </div>
+            </button>
           ))
         )}
       </div>

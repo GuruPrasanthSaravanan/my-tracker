@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
-import { readSheet, appendRow } from '../api/sheets';
+import { readSheet, appendRow, updateRow } from '../api/sheets';
 
 export function useProjects() {
   const { token } = useAuth();
@@ -38,6 +38,18 @@ export function useProjects() {
     await fetchData();
   }, [token, fetchData]);
 
+  const editProject = useCallback(async (rowIndex, entry) => {
+    const sheetRow = rowIndex + 2;
+    const values = [
+      entry.code, entry.name, entry.budget || '',
+      entry.estLabour || '', entry.estMaterial || '', entry.estMachine || '', entry.estOther || '',
+      entry.startDate || '', entry.endDatePlanned || '', entry.endDateActual || '',
+      entry.manager || '', entry.status || '', entry.notes || '',
+    ];
+    await updateRow(token, `Projects!A${sheetRow}:M${sheetRow}`, values);
+    await fetchData();
+  }, [token, fetchData]);
+
   const addMilestone = useCallback(async (entry) => {
     const values = [
       entry.project, entry.milestone,
@@ -48,7 +60,8 @@ export function useProjects() {
     await fetchData();
   }, [token, fetchData]);
 
-  const parsedProjects = projects.map((row) => ({
+  const parsedProjects = projects.map((row, index) => ({
+    _rowIndex: index,
     code: row[0] || '',
     name: row[1] || '',
     budget: parseFloat(row[2]) || 0,
@@ -78,6 +91,7 @@ export function useProjects() {
     milestones: parsedMilestones,
     isLoading,
     addProject,
+    editProject,
     addMilestone,
     refresh: fetchData,
   };
