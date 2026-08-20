@@ -3,6 +3,8 @@ import { useAuth } from '../auth/useAuth';
 import BottomNav from './BottomNav';
 import CashBookPage from '../pages/CashBookPage';
 import VendorsPage from '../pages/VendorsPage';
+import ProjectsPage from '../pages/ProjectsPage';
+import DebtsPage from '../pages/DebtsPage';
 
 export default function Layout() {
   const { user, signOut } = useAuth();
@@ -21,8 +23,8 @@ export default function Layout() {
           <Route path="/" element={<Navigate to="/cashbook" replace />} />
           <Route path="/cashbook" element={<CashBookPage />} />
           <Route path="/vendors" element={<VendorsPage />} />
-          <Route path="/dashboard" element={<div className="text-gray-400 text-center py-8">Dashboard - Phase 2</div>} />
-          <Route path="/more" element={<div className="text-gray-400 text-center py-8">More - Phase 2</div>} />
+          <Route path="/projects" element={<ProjectsPage />} />
+          <Route path="/debts" element={<DebtsPage />} />
         </Routes>
       </main>
       <BottomNav />

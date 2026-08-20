@@ -1,11 +1,11 @@
 import { NavLink } from 'react-router-dom';
-import { BookOpen, Users, LayoutDashboard, MoreHorizontal } from 'lucide-react';
+import { BookOpen, Users, FolderKanban, CreditCard } from 'lucide-react';
 
 const tabs = [
   { to: '/cashbook', icon: BookOpen, label: 'CashBook' },
   { to: '/vendors', icon: Users, label: 'Vendors' },
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/more', icon: MoreHorizontal, label: 'More' },
+  { to: '/projects', icon: FolderKanban, label: 'Projects' },
+  { to: '/debts', icon: CreditCard, label: 'Debts' },
 ];
 
 export default function BottomNav() {
