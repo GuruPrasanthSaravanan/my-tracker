@@ -48,15 +48,21 @@ export function useDebts() {
   }
 
   const addDebt = useCallback(async (entry) => {
+    // Auto-assign next priority if not provided
+    let priority = entry.priority;
+    if (!priority) {
+      const maxPriority = debtRows.reduce((max, r) => Math.max(max, parseInt(r[0]) || 0), 0);
+      priority = String(maxPriority + 1);
+    }
     const values = [
-      entry.priority || '', entry.name,
+      priority, entry.name,
       entry.originalAmount || '', entry.interestRate || '',
       entry.targetDate || '', entry.debitsFrom || '',
       entry.status || 'Active',
     ];
     await appendRow(token, 'Debts!A:G', values);
     await fetchData();
-  }, [token, fetchData]);
+  }, [token, fetchData, debtRows]);
 
   const editDebt = useCallback(async (debtIndex, entry) => {
     const rawIndex = rowIndexMap[debtIndex];
