@@ -89,6 +89,12 @@ export function useDebts() {
 
   const progress = computeDebtProgress(debtRows);
 
+  // Compute total paid per debt name from payoff rows
+  const paidByDebt = {};
+  for (const p of payoffRows) {
+    paidByDebt[p.debtName] = (paidByDebt[p.debtName] || 0) + p.payment;
+  }
+
   // Separate debts from lends
   const debts = debtRows.filter((r) => (r[6] || '').toLowerCase() !== 'lent');
   const lends = debtRows.filter((r) => (r[6] || '').toLowerCase() === 'lent');
@@ -96,7 +102,7 @@ export function useDebts() {
   return {
     debtRows, debts, lends, payoffRows, isLoading,
     addDebt, editDebt, addPayment,
-    refresh: fetchData, progress,
+    refresh: fetchData, progress, paidByDebt,
     _debtIndexOf: (row) => debtRows.indexOf(row),
   };
 }

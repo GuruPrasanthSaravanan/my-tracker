@@ -83,9 +83,11 @@ function DebtForm({ title, initial, onSave, onClose }) {
   );
 }
 
-function PaymentForm({ debtName, onSave, onClose }) {
+function PaymentForm({ debtName, outstanding = 0, onSave, onClose }) {
   const today = new Date().toISOString().split('T')[0];
   const [form, setForm] = useState({ month: today, amount: '', remaining: '' });
+
+  const currentOutstanding = Math.max(outstanding - (parseFloat(form.amount) || 0), 0);
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end">
@@ -95,6 +97,12 @@ function PaymentForm({ debtName, onSave, onClose }) {
           <button onClick={onClose} className="p-1"><X size={20} /></button>
         </div>
         <div className="space-y-3">
+          {outstanding > 0 && (
+            <div className="bg-blue-50 rounded-lg p-3">
+              <p className="text-xs text-gray-500">Current Outstanding</p>
+              <p className="text-lg font-bold text-primary">{formatCurrency(outstanding)}</p>
+            </div>
+          )}
           <div>
             <label className="text-xs text-gray-500">Month / Date</label>
             <input type="text" value={form.month} onChange={(e) => setForm(f => ({ ...f, month: e.target.value }))}
@@ -106,13 +114,12 @@ function PaymentForm({ debtName, onSave, onClose }) {
               onChange={(e) => setForm(f => ({ ...f, amount: e.target.value }))}
               placeholder="0" className="w-full border rounded-lg px-3 py-3 mt-0.5 text-xl font-bold text-center" />
           </div>
-          <div>
-            <label className="text-xs text-gray-500">Remaining Balance (optional)</label>
-            <input type="number" inputMode="numeric" value={form.remaining}
-              onChange={(e) => setForm(f => ({ ...f, remaining: e.target.value }))}
-              placeholder="0" className="w-full border rounded-lg px-3 py-2 mt-0.5" />
-          </div>
-          <button onClick={() => onSave({ debtName, month: form.month, payment: form.amount, remaining: form.remaining })}
+          {form.amount && outstanding > 0 && (
+            <p className="text-xs text-gray-500 text-center">
+              Remaining after payment: <span className="font-semibold text-gray-900">{formatCurrency(currentOutstanding)}</span>
+            </p>
+          )}
+          <button onClick={() => onSave({ debtName, month: form.month, payment: form.amount, remaining: outstanding > 0 ? String(currentOutstanding) : form.remaining })}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-lg mt-2">
             Save Payment
           </button>
@@ -123,7 +130,7 @@ function PaymentForm({ debtName, onSave, onClose }) {
 }
 
 export default function DebtsPage() {
-  const { debtRows, debts, lends, payoffRows, isLoading, addDebt, editDebt, addPayment, progress, _debtIndexOf } = useDebts();
+  const { debtRows, debts, lends, payoffRows, isLoading, addDebt, editDebt, addPayment, progress, paidByDebt, _debtIndexOf } = useDebts();
   const { lists } = useLists();
   const [showForm, setShowForm] = useState(null); // null | 'add-debt' | 'add-lend' | 'payment' | 'edit'
   const [selectedDebt, setSelectedDebt] = useState(null);
@@ -255,7 +262,7 @@ export default function DebtsPage() {
             <div key={debt.name} className="flex items-center">
               <button className="flex-1 text-left active:bg-gray-50"
                 onClick={() => setSelectedDebt(selectedDebt === debt.name ? null : debt.name)}>
-                <DebtRow debt={debt} isCleared={debt.status === 'Cleared'} />
+                <DebtRow debt={debt} isCleared={debt.status === 'Cleared'} paid={paidByDebt[debt.name] || 0} />
               </button>
               <button onClick={() => openEdit(debt._raw)} className="p-2 text-gray-400">
                 <Pencil size={14} />
@@ -323,7 +330,7 @@ export default function DebtsPage() {
             <div key={lend.name} className="flex items-center">
               <button className="flex-1 text-left active:bg-gray-50"
                 onClick={() => setSelectedDebt(selectedDebt === lend.name ? null : lend.name)}>
-                <DebtRow debt={lend} isCleared={lend.status === 'Recovered'} />
+                <DebtRow debt={lend} isCleared={lend.status === 'Recovered'} paid={paidByDebt[lend.name] || 0} />
               </button>
               <button onClick={() => openEdit(lend._raw)} className="p-2 text-gray-400">
                 <Pencil size={14} />
@@ -352,7 +359,16 @@ export default function DebtsPage() {
       )}
 
       {showForm === 'payment' && displayDebt && (
-        <PaymentForm debtName={displayDebt} onSave={handlePayment} onClose={() => setShowForm(null)} />
+        <PaymentForm
+          debtName={displayDebt}
+          outstanding={(() => {
+            const d = debtRows.find((r) => r[1] === displayDebt);
+            const orig = d ? parseFloat(d[2]) || 0 : 0;
+            return Math.max(orig - (paidByDebt[displayDebt] || 0), 0);
+          })()}
+          onSave={handlePayment}
+          onClose={() => setShowForm(null)}
+        />
       )}
 
       {toast && <Toast {...toast} onClose={() => setToast(null)} />}
