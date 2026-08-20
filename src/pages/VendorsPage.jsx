@@ -11,7 +11,7 @@ import { formatCurrency } from '../utils/formatters';
 
 export default function VendorsPage() {
   const { rows, isLoading, addEntry, editEntry, deleteEntry, totalOwed, vendorBalances, projectBills } = useVendors();
-  const { lists } = useLists();
+  const { lists, addListItem } = useLists();
   const [showForm, setShowForm] = useState(false);
   const [editingRow, setEditingRow] = useState(null);
   const [filterVendor, setFilterVendor] = useState(null);
@@ -152,6 +152,7 @@ export default function VendorsPage() {
           lists={lists}
           onSave={handleSave}
           onClose={() => setShowForm(false)}
+          onAddListItem={addListItem}
         />
       )}
 
@@ -160,6 +161,7 @@ export default function VendorsPage() {
           type="vendors"
           lists={lists}
           isEditing
+          onAddListItem={addListItem}
           initialData={editingRow.data}
           onSave={handleEdit}
           onDelete={handleDelete}

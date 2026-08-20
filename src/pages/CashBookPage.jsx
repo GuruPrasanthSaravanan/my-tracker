@@ -11,7 +11,7 @@ import { formatCurrency } from '../utils/formatters';
 
 export default function CashBookPage() {
   const { rows, isLoading, addEntry, editEntry, deleteEntry, totalBalance, accountBalances } = useCashBook();
-  const { lists } = useLists();
+  const { lists, addListItem } = useLists();
   const [showForm, setShowForm] = useState(false);
   const [editingRow, setEditingRow] = useState(null); // { index, data }
   const [toast, setToast] = useState(null);
@@ -121,6 +121,7 @@ export default function CashBookPage() {
           lists={lists}
           onSave={handleSave}
           onClose={() => setShowForm(false)}
+          onAddListItem={addListItem}
         />
       )}
 
@@ -129,6 +130,7 @@ export default function CashBookPage() {
           type="cashbook"
           lists={lists}
           isEditing
+          onAddListItem={addListItem}
           initialData={editingRow.data}
           onSave={handleEdit}
           onDelete={handleDelete}

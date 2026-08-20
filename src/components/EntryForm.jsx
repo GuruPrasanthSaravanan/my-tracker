@@ -21,7 +21,7 @@ const placeholders = {
 const showDirection = { cashbook: true, vendors: true };
 const showAmount = { cashbook: true, vendors: true, project: true, 'debt-payment': true };
 
-export default function EntryForm({ type, lists, onSave, onClose, initialData, onDelete, isEditing }) {
+export default function EntryForm({ type, lists, onSave, onClose, initialData, onDelete, isEditing, onAddListItem }) {
   const today = new Date().toISOString().split('T')[0];
   const [form, setForm] = useState(initialData || {
     date: today,
@@ -105,15 +105,19 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
 
           {type === 'cashbook' && (
             <>
-              <Dropdown label="Account" options={lists.accounts} value={form.account} onChange={(v) => set('account', v)} />
-              <Dropdown label="Type" options={lists.types} value={form.type} onChange={(v) => set('type', v)} />
+              <Dropdown label="Account" options={lists.accounts} value={form.account} onChange={(v) => set('account', v)}
+                onAddNew={onAddListItem ? (v) => onAddListItem('accounts', v) : undefined} />
+              <Dropdown label="Type" options={lists.types} value={form.type} onChange={(v) => set('type', v)}
+                onAddNew={onAddListItem ? (v) => onAddListItem('types', v) : undefined} />
             </>
           )}
 
           {type === 'vendors' && (
             <>
-              <Dropdown label="Vendor" options={lists.vendors} value={form.vendor} onChange={(v) => set('vendor', v)} />
-              <Dropdown label="Project" options={lists.projects} value={form.project} onChange={(v) => set('project', v)} />
+              <Dropdown label="Vendor" options={lists.vendors} value={form.vendor} onChange={(v) => set('vendor', v)}
+                onAddNew={onAddListItem ? (v) => onAddListItem('vendors', v) : undefined} />
+              <Dropdown label="Project" options={lists.projects} value={form.project} onChange={(v) => set('project', v)}
+                onAddNew={onAddListItem ? (v) => onAddListItem('projects', v) : undefined} />
             </>
           )}
 

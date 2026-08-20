@@ -14,7 +14,7 @@ import { formatCurrency } from '../utils/formatters';
 export default function ProjectsPage() {
   const { projects, milestones, isLoading, addProject, editProject, addMilestone, refresh: refreshProjects } = useProjects();
   const { rows: vendorRows, addEntry: addVendorEntry, refresh: refreshVendors } = useVendors();
-  const { lists } = useLists();
+  const { lists, addListItem } = useLists();
   const [selectedProject, setSelectedProject] = useState(null);
   const [showForm, setShowForm] = useState(null); // null | 'project' | 'milestone' | 'expense'
   const [toast, setToast] = useState(null);
@@ -119,6 +119,7 @@ export default function ProjectsPage() {
           lists={lists}
           onSave={handleSaveProject}
           onClose={() => setShowForm(null)}
+          onAddListItem={addListItem}
         />
       )}
 
@@ -128,6 +129,7 @@ export default function ProjectsPage() {
           lists={lists}
           onSave={handleSaveMilestone}
           onClose={() => setShowForm(null)}
+          onAddListItem={addListItem}
         />
       )}
 
@@ -135,6 +137,7 @@ export default function ProjectsPage() {
         <EntryForm
           type="vendors"
           lists={lists}
+          onAddListItem={addListItem}
           initialData={{
             date: new Date().toISOString().split('T')[0],
             vendor: '',
