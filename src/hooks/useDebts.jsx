@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
-import { readSheet, appendRow, updateRow } from '../api/sheets';
+import { readSheet, appendRow, updateRow, clearRow } from '../api/sheets';
 import { computeDebtProgress } from '../utils/aggregations';
 
 // Column layout (Debts tab):
@@ -32,6 +32,7 @@ export function useDebts() {
   const debtRows = [];
   const payoffRows = [];
   const rowIndexMap = []; // maps debtRows index to rawRows index
+  const payoffIndexMap = []; // maps payoffRows index to rawRows index
 
   for (let i = 0; i < rawRows.length; i++) {
     const row = rawRows[i];
@@ -41,6 +42,7 @@ export function useDebts() {
       rowIndexMap.push(i);
       debtRows.push(row);
     } else if (rowType === 'PAYMENT') {
+      payoffIndexMap.push(i);
       payoffRows.push({
         debtName: row[1] || '',
         month: row[8] || '',
@@ -55,6 +57,7 @@ export function useDebts() {
         rowIndexMap.push(i);
         debtRows.push(row);
       } else if (row[0] && row[1] && !hasStatus) {
+        payoffIndexMap.push(i);
         payoffRows.push({
           debtName: row[0] || '',
           month: row[1] || '',
@@ -103,6 +106,24 @@ export function useDebts() {
     await fetchData();
   }, [token, fetchData]);
 
+  const editPayment = useCallback(async (paymentIndex, entry) => {
+    const rawIndex = payoffIndexMap[paymentIndex];
+    const sheetRow = rawIndex + 2;
+    const values = [
+      '', entry.debtName, '', '', '', '', '', 'PAYMENT',
+      entry.month, entry.payment || '', entry.remaining || '',
+    ];
+    await updateRow(token, `Debts!A${sheetRow}:K${sheetRow}`, values);
+    await fetchData();
+  }, [token, fetchData, payoffIndexMap]);
+
+  const deletePayment = useCallback(async (paymentIndex) => {
+    const rawIndex = payoffIndexMap[paymentIndex];
+    const sheetRow = rawIndex + 2;
+    await clearRow(token, `Debts!A${sheetRow}:K${sheetRow}`);
+    await fetchData();
+  }, [token, fetchData, payoffIndexMap]);
+
   const progress = computeDebtProgress(debtRows);
 
   const paidByDebt = {};
@@ -115,8 +136,9 @@ export function useDebts() {
 
   return {
     debtRows, debts, lends, payoffRows, isLoading,
-    addDebt, editDebt, addPayment,
+    addDebt, editDebt, addPayment, editPayment, deletePayment,
     refresh: fetchData, progress, paidByDebt,
     _debtIndexOf: (row) => debtRows.indexOf(row),
+    _paymentIndexOf: (payoffRow) => payoffRows.indexOf(payoffRow),
   };
 }
