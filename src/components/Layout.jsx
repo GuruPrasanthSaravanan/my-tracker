@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuth } from '../auth/useAuth';
+import { DataProvider } from '../contexts/DataContext';
 import BottomNav from './BottomNav';
 import CashBookPage from '../pages/CashBookPage';
 import VendorsPage from '../pages/VendorsPage';
@@ -19,13 +20,15 @@ export default function Layout() {
         </div>
       </header>
       <main className="px-4 pt-4">
-        <Routes>
-          <Route path="/" element={<Navigate to="/cashbook" replace />} />
-          <Route path="/cashbook" element={<CashBookPage />} />
-          <Route path="/vendors" element={<VendorsPage />} />
-          <Route path="/projects" element={<ProjectsPage />} />
-          <Route path="/debts" element={<DebtsPage />} />
-        </Routes>
+        <DataProvider>
+          <Routes>
+            <Route path="/" element={<Navigate to="/cashbook" replace />} />
+            <Route path="/cashbook" element={<CashBookPage />} />
+            <Route path="/vendors" element={<VendorsPage />} />
+            <Route path="/projects" element={<ProjectsPage />} />
+            <Route path="/debts" element={<DebtsPage />} />
+          </Routes>
+        </DataProvider>
       </main>
       <BottomNav />
     </div>

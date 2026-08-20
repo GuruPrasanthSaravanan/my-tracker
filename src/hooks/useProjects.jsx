@@ -13,8 +13,8 @@ export function useProjects() {
     setIsLoading(true);
     try {
       const [projData, msData] = await Promise.all([
-        readSheet(token, 'Projects!A2:M'),
-        readSheet(token, 'Milestones!A2:F'),
+        readSheet(token, 'Projects!A2:M1000'),
+        readSheet(token, 'Milestones!A2:F2000'),
       ]);
       setProjects(projData);
       setMilestones(msData);

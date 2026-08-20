@@ -1,5 +1,4 @@
-import { readSheet } from './sheets';
-import { SPREADSHEET_ID } from '../config';
+import { readSheet, updateRow } from './sheets';
 
 /**
  * Fetch all dropdown lists from the Lists tab.
@@ -30,30 +29,29 @@ export async function fetchLists(token) {
 
 /**
  * Add a new value to a specific list column.
+ * Trims whitespace and skips the write (no-op) if a case-insensitive duplicate
+ * already exists in that column, to avoid near-duplicate entries like "Raju" / "raju ".
  * @param {string} token
  * @param {'accounts'|'types'|'vendors'|'projects'} listName
  * @param {string} value - The new value to add
+ * @returns {Promise<{ added: boolean, value: string }>} the (possibly trimmed) value actually used, and whether a new row was written
  */
 export async function addToList(token, listName, value) {
   const colMap = { accounts: 'A', types: 'B', vendors: 'C', projects: 'D', milestoneStatuses: 'E' };
   const col = colMap[listName];
   if (!col) throw new Error(`Unknown list: ${listName}`);
 
-  // Find the next empty row in that column by reading existing data
+  const trimmed = value.trim();
   const rows = await readSheet(token, `Lists!${col}2:${col}100`);
-  const nextRow = rows.length + 2; // +2 because data starts at row 2
+  const existing = rows.map((r) => (r[0] || '').trim());
 
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/Lists!${col}${nextRow}?valueInputOption=USER_ENTERED`;
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ values: [[value]] }),
-  });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({}));
-    throw new Error(error.error?.message || `Sheets API error: ${res.status}`);
+  const duplicate = existing.find((v) => v.toLowerCase() === trimmed.toLowerCase());
+  if (duplicate) {
+    // Already exists (case-insensitive) - don't write a near-duplicate row
+    return { added: false, value: duplicate };
   }
+
+  const nextRow = rows.length + 2; // +2 because data starts at row 2
+  await updateRow(token, `Lists!${col}${nextRow}`, [trimmed]);
+  return { added: true, value: trimmed };
 }

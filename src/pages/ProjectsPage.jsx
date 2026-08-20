@@ -1,7 +1,5 @@
 import { useState } from 'react';
-import { useProjects } from '../hooks/useProjects';
-import { useVendors } from '../hooks/useVendors';
-import { useLists } from '../hooks/useLists';
+import { useAppData } from '../contexts/DataContext';
 import { computeProjectSpent } from '../utils/aggregations';
 import ProjectCard from '../components/ProjectCard';
 import ProjectDetail from '../components/ProjectDetail';
@@ -12,9 +10,10 @@ import EntryForm from '../components/EntryForm';
 import { formatCurrency } from '../utils/formatters';
 
 export default function ProjectsPage() {
-  const { projects, milestones, isLoading, addProject, editProject, addMilestone, refresh: refreshProjects } = useProjects();
-  const { rows: vendorRows, addEntry: addVendorEntry, refresh: refreshVendors } = useVendors();
-  const { lists, addListItem } = useLists();
+  const { projects: projectsData, vendors, lists: listsData } = useAppData();
+  const { projects, milestones, isLoading, addProject, editProject, addMilestone, refresh: refreshProjects } = projectsData;
+  const { rows: vendorRows, addEntry: addVendorEntry, refresh: refreshVendors } = vendors;
+  const { lists, addListItem } = listsData;
   const [selectedProject, setSelectedProject] = useState(null);
   const [showForm, setShowForm] = useState(null); // null | 'project' | 'milestone' | 'expense'
   const [toast, setToast] = useState(null);
@@ -120,6 +119,7 @@ export default function ProjectsPage() {
           onSave={handleSaveProject}
           onClose={() => setShowForm(null)}
           onAddListItem={addListItem}
+          existingProjectCodes={projects.map((p) => p.code)}
         />
       )}
 

@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { useVendors } from '../hooks/useVendors';
-import { useLists } from '../hooks/useLists';
+import { useAppData } from '../contexts/DataContext';
 import SummaryCard from '../components/SummaryCard';
 import TransactionRow from '../components/TransactionRow';
 import FAB from '../components/FAB';
@@ -10,8 +9,9 @@ import EntryForm from '../components/EntryForm';
 import { formatCurrency } from '../utils/formatters';
 
 export default function VendorsPage() {
-  const { rows, isLoading, addEntry, editEntry, deleteEntry, totalOwed, vendorBalances, projectBills } = useVendors();
-  const { lists, addListItem } = useLists();
+  const { vendors, lists: listsData } = useAppData();
+  const { rows, isLoading, addEntry, editEntry, deleteEntry, totalOwed, vendorBalances, projectBills } = vendors;
+  const { lists, addListItem } = listsData;
   const [showForm, setShowForm] = useState(false);
   const [editingRow, setEditingRow] = useState(null);
   const [filterVendor, setFilterVendor] = useState(null);

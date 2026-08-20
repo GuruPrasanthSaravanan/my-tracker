@@ -14,4 +14,10 @@ describe('formatDate', () => {
     expect(formatDate('2026-09-01')).toBe('1 Sep');
     expect(formatDate('2026-12-25')).toBe('25 Dec');
   });
+
+  it('falls back to the raw string for unparseable dates instead of NaN', () => {
+    expect(formatDate('not-a-real-date')).toBe('not-a-real-date');
+    expect(formatDate('')).toBe('');
+    expect(formatDate(undefined)).toBe('');
+  });
 });

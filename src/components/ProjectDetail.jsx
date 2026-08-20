@@ -16,6 +16,7 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
     status: project.status || 'Not Started',
     notes: project.notes || '',
   });
+  const [isSaving, setIsSaving] = useState(false);
 
   let labour = 0, material = 0, machine = 0, other = 0;
   for (const row of vendorRows) {
@@ -38,17 +39,23 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
   const projectExpenses = vendorRows.filter((r) => r[3] === project.code);
   const onCredit = projectExpenses.reduce((sum, r) => sum + (parseFloat(r[4]) || 0) - (parseFloat(r[5]) || 0), 0);
 
-  const handleSaveEdit = () => {
-    onEditProject({
-      ...project,
-      budget: editForm.budget,
-      endDatePlanned: editForm.endDatePlanned,
-      endDateActual: editForm.endDateActual,
-      manager: editForm.manager,
-      status: editForm.status,
-      notes: editForm.notes,
-    });
-    setShowEditForm(false);
+  const handleSaveEdit = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      await onEditProject({
+        ...project,
+        budget: editForm.budget,
+        endDatePlanned: editForm.endDatePlanned,
+        endDateActual: editForm.endDateActual,
+        manager: editForm.manager,
+        status: editForm.status,
+        notes: editForm.notes,
+      });
+      setShowEditForm(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const statusOptions = ['Not Started', 'In Progress', 'Completed', 'Ongoing'];
@@ -75,13 +82,15 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
                 <label className="text-xs text-gray-500">Budget</label>
                 <input type="number" inputMode="numeric" value={editForm.budget}
                   onChange={(e) => setEditForm(f => ({ ...f, budget: e.target.value }))}
-                  className="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5" />
+                  disabled={isSaving}
+                  className="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5 disabled:opacity-50" />
               </div>
               <div>
                 <label className="text-xs text-gray-500">Status</label>
                 <select value={editForm.status}
                   onChange={(e) => setEditForm(f => ({ ...f, status: e.target.value }))}
-                  className="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5">
+                  disabled={isSaving}
+                  className="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5 disabled:opacity-50">
                   {statusOptions.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </div>
@@ -89,30 +98,34 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
                 <label className="text-xs text-gray-500">End (Planned)</label>
                 <input type="date" value={editForm.endDatePlanned}
                   onChange={(e) => setEditForm(f => ({ ...f, endDatePlanned: e.target.value }))}
-                  className="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5" />
+                  disabled={isSaving}
+                  className="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5 disabled:opacity-50" />
               </div>
               <div>
                 <label className="text-xs text-gray-500">End (Actual)</label>
                 <input type="date" value={editForm.endDateActual}
                   onChange={(e) => setEditForm(f => ({ ...f, endDateActual: e.target.value }))}
-                  className="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5" />
+                  disabled={isSaving}
+                  className="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5 disabled:opacity-50" />
               </div>
               <div>
                 <label className="text-xs text-gray-500">Manager</label>
                 <input type="text" value={editForm.manager}
                   onChange={(e) => setEditForm(f => ({ ...f, manager: e.target.value }))}
-                  className="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5" />
+                  disabled={isSaving}
+                  className="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5 disabled:opacity-50" />
               </div>
               <div>
                 <label className="text-xs text-gray-500">Notes</label>
                 <input type="text" value={editForm.notes}
                   onChange={(e) => setEditForm(f => ({ ...f, notes: e.target.value }))}
-                  className="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5" />
+                  disabled={isSaving}
+                  className="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5 disabled:opacity-50" />
               </div>
             </div>
-            <button onClick={handleSaveEdit}
-              className="w-full bg-primary text-white py-2 rounded-lg text-sm font-medium mt-2">
-              Save Changes
+            <button onClick={handleSaveEdit} disabled={isSaving}
+              className="w-full bg-primary text-white py-2 rounded-lg text-sm font-medium mt-2 disabled:opacity-60">
+              {isSaving ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         )}

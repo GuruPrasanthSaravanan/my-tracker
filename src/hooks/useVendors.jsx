@@ -12,7 +12,10 @@ export function useVendors() {
     if (!token) return;
     setIsLoading(true);
     try {
-      const data = await readSheet(token, 'Vendors!A2:F');
+      // Bounded range (5000 rows ~ years of daily entries) to avoid an unbounded
+      // read as the sheet grows indefinitely. True pagination is deferred to a
+      // later phase - see docs/superpowers/mytracker-bugs-and-lessons.md §6.10.
+      const data = await readSheet(token, 'Vendors!A2:F5000');
       setRows(data);
     } catch (err) {
       console.error('Failed to fetch Vendors:', err);

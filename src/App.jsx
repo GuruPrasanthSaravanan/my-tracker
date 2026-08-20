@@ -4,8 +4,7 @@ import LoginPage from './pages/LoginPage';
 import Layout from './components/Layout';
 
 function ProtectedRoute({ children }) {
-  const { isSignedIn, isLoading } = useAuth();
-  if (isLoading) return <div className="flex items-center justify-center min-h-screen"><p>Loading...</p></div>;
+  const { isSignedIn } = useAuth();
   if (!isSignedIn) return <Navigate to="/login" replace />;
   return children;
 }

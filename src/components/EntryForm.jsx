@@ -21,7 +21,20 @@ const placeholders = {
 const showDirection = { cashbook: true, vendors: true };
 const showAmount = { cashbook: true, vendors: true, project: true, 'debt-payment': true };
 
-export default function EntryForm({ type, lists, onSave, onClose, initialData, onDelete, isEditing, onAddListItem }) {
+/** Generate a unique project code from a name, avoiding collisions with existing codes. */
+function makeUniqueProjectCode(name, existingCodes = []) {
+  const base = name.toUpperCase().replace(/\s+/g, '-').slice(0, 16) || 'PROJECT';
+  if (!existingCodes.includes(base)) return base;
+  let i = 2;
+  let candidate = `${base}-${i}`;
+  while (existingCodes.includes(candidate)) {
+    i++;
+    candidate = `${base}-${i}`;
+  }
+  return candidate;
+}
+
+export default function EntryForm({ type, lists, onSave, onClose, initialData, onDelete, isEditing, onAddListItem, existingProjectCodes }) {
   const today = new Date().toISOString().split('T')[0];
   const [form, setForm] = useState(initialData || {
     date: today,
@@ -34,34 +47,55 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
     direction: 'out',
   });
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [error, setError] = useState('');
 
   const set = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
 
-  const handleSubmit = () => {
-    if (showAmount[type] && !form.amount) return;
-    if (!showAmount[type] && !form.description) return;
+  const validate = () => {
+    if (showAmount[type] && !form.amount) return 'Please enter an amount.';
+    if (!showAmount[type] && !form.description) return 'Please enter a description.';
+    if (type === 'cashbook' && !form.account) return 'Please select an Account.';
+    if (type === 'cashbook' && !form.type) return 'Please select a Type.';
+    if (type === 'vendors' && !form.vendor) return 'Please select a Vendor.';
+    if (type === 'project' && !form.description) return 'Please enter a project name.';
+    return '';
+  };
 
+  const handleSubmit = async () => {
+    if (isSaving || isDeleting) return;
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError('');
+
+    let payload;
     if (type === 'cashbook') {
-      onSave({
+      payload = {
         date: form.date,
         description: form.description,
         account: form.account,
         type: form.type,
         moneyIn: form.direction === 'in' ? form.amount : '',
         moneyOut: form.direction === 'out' ? form.amount : '',
-      });
+      };
     } else if (type === 'vendors') {
-      onSave({
+      payload = {
         date: form.date,
         vendor: form.vendor,
         description: form.description,
         project: form.project,
         bill: form.direction === 'in' ? form.amount : '',
         paid: form.direction === 'out' ? form.amount : '',
-      });
+      };
     } else if (type === 'project') {
-      onSave({
-        code: form.description.toUpperCase().replace(/\s+/g, '-').slice(0, 10),
+      payload = {
+        code: isEditing && initialData?.code
+          ? initialData.code
+          : makeUniqueProjectCode(form.description, existingProjectCodes || []),
         name: form.description,
         budget: form.amount || '',
         estLabour: '', estMaterial: '', estMachine: '', estOther: '',
@@ -70,37 +104,61 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
         manager: '',
         status: 'Not Started',
         notes: '',
-      });
+      };
     } else if (type === 'milestone') {
-      onSave({
+      payload = {
         milestone: form.description,
         plannedDate: form.date,
         actualDate: '',
         status: 'Not Started',
         notes: '',
-      });
+      };
     } else if (type === 'debt-payment') {
-      onSave({
+      payload = {
         description: form.description,
         date: form.date,
         amount: form.amount,
-      });
+      };
+    }
+
+    setIsSaving(true);
+    try {
+      await onSave(payload);
+    } finally {
+      setIsSaving(false);
     }
   };
+
+  const handleDelete = async () => {
+    if (isSaving || isDeleting) return;
+    setIsDeleting(true);
+    try {
+      await onDelete();
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const busy = isSaving || isDeleting;
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end">
       <div className="bg-white w-full rounded-t-2xl p-4 pb-8 max-h-[85vh] overflow-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold">{isEditing ? 'Edit' : 'New'} {titles[type] || 'Entry'}</h2>
-          <button onClick={onClose} className="p-1"><X size={20} /></button>
+          <button onClick={onClose} className="p-1" disabled={busy}><X size={20} /></button>
         </div>
 
         <div className="space-y-3">
+          {error && (
+            <div className="bg-red-50 text-danger text-sm px-3 py-2 rounded-lg">{error}</div>
+          )}
+
           <div>
             <label className="text-xs text-gray-500">Date</label>
             <input type="date" value={form.date} onChange={(e) => set('date', e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 mt-1" />
+              disabled={busy}
+              className="w-full border rounded-lg px-3 py-2 mt-1 disabled:opacity-50" />
           </div>
 
           {type === 'cashbook' && (
@@ -127,7 +185,8 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
             </label>
             <input type="text" value={form.description} onChange={(e) => set('description', e.target.value)}
               placeholder={placeholders[type] || ''}
-              className="w-full border rounded-lg px-3 py-2 mt-1" />
+              disabled={busy}
+              className="w-full border rounded-lg px-3 py-2 mt-1 disabled:opacity-50" />
           </div>
 
           {showDirection[type] && (
@@ -138,7 +197,8 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
               <div className="grid grid-cols-2 gap-2 mt-1">
                 <button
                   onClick={() => set('direction', 'in')}
-                  className={`py-2 rounded-lg text-sm font-medium transition ${
+                  disabled={busy}
+                  className={`py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 ${
                     form.direction === 'in' ? 'bg-success text-white' : 'bg-gray-100 text-gray-600'
                   }`}
                 >
@@ -146,7 +206,8 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
                 </button>
                 <button
                   onClick={() => set('direction', 'out')}
-                  className={`py-2 rounded-lg text-sm font-medium transition ${
+                  disabled={busy}
+                  className={`py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 ${
                     form.direction === 'out' ? 'bg-danger text-white' : 'bg-gray-100 text-gray-600'
                   }`}
                 >
@@ -164,30 +225,31 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
               <input type="number" inputMode="numeric" value={form.amount}
                 onChange={(e) => set('amount', e.target.value)}
                 placeholder="0"
-                className="w-full border rounded-lg px-3 py-3 mt-1 text-xl font-bold text-center" />
+                disabled={busy}
+                className="w-full border rounded-lg px-3 py-3 mt-1 text-xl font-bold text-center disabled:opacity-50" />
             </div>
           )}
 
-          <button onClick={handleSubmit}
-            className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-lg active:scale-98 transition mt-2">
-            {isEditing ? 'Update' : 'Save'}
+          <button onClick={handleSubmit} disabled={busy}
+            className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-lg active:scale-98 transition mt-2 disabled:opacity-60">
+            {isSaving ? 'Saving...' : (isEditing ? 'Update' : 'Save')}
           </button>
 
           {isEditing && onDelete && (
             confirmDelete ? (
               <div className="flex gap-2">
-                <button onClick={onDelete}
-                  className="flex-1 bg-danger text-white py-3 rounded-xl font-semibold text-sm">
-                  Confirm Delete
+                <button onClick={handleDelete} disabled={busy}
+                  className="flex-1 bg-danger text-white py-3 rounded-xl font-semibold text-sm disabled:opacity-60">
+                  {isDeleting ? 'Deleting...' : 'Confirm Delete'}
                 </button>
-                <button onClick={() => setConfirmDelete(false)}
-                  className="flex-1 bg-gray-100 text-gray-600 py-3 rounded-xl font-semibold text-sm">
+                <button onClick={() => setConfirmDelete(false)} disabled={busy}
+                  className="flex-1 bg-gray-100 text-gray-600 py-3 rounded-xl font-semibold text-sm disabled:opacity-60">
                   Cancel
                 </button>
               </div>
             ) : (
-              <button onClick={() => setConfirmDelete(true)}
-                className="w-full flex items-center justify-center gap-2 text-danger py-2 text-sm">
+              <button onClick={() => setConfirmDelete(true)} disabled={busy}
+                className="w-full flex items-center justify-center gap-2 text-danger py-2 text-sm disabled:opacity-60">
                 <Trash2 size={16} /> Delete this entry
               </button>
             )

@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { useDebts } from '../hooks/useDebts';
-import { useLists } from '../hooks/useLists';
+import { useAppData } from '../contexts/DataContext';
 import ProgressBar from '../components/ProgressBar';
 import DebtRow from '../components/DebtRow';
 import Toast from '../components/Toast';
@@ -13,27 +12,53 @@ function DebtForm({ title, initial, onSave, onClose }) {
     priority: '', name: '', originalAmount: '', interestRate: '',
     targetDate: '', debitsFrom: '', status: 'Active',
   });
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleSubmit = async () => {
+    if (isSaving) return;
+    if (!form.name.trim()) {
+      setError('Please enter a name/description.');
+      return;
+    }
+    if (!form.originalAmount) {
+      setError('Please enter an amount.');
+      return;
+    }
+    setError('');
+    setIsSaving(true);
+    try {
+      await onSave(form);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end">
       <div className="bg-white w-full rounded-t-2xl p-4 pb-8 max-h-[85vh] overflow-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold">{title}</h2>
-          <button onClick={onClose} className="p-1"><X size={20} /></button>
+          <button onClick={onClose} className="p-1" disabled={isSaving}><X size={20} /></button>
         </div>
         <div className="space-y-3">
+          {error && (
+            <div className="bg-red-50 text-danger text-sm px-3 py-2 rounded-lg">{error}</div>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs text-gray-500">Priority</label>
               <input type="number" inputMode="numeric" value={form.priority}
                 onChange={(e) => set('priority', e.target.value)}
-                placeholder="1" className="w-full border rounded-lg px-3 py-2 mt-0.5" />
+                disabled={isSaving}
+                placeholder="1" className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
             </div>
             <div>
               <label className="text-xs text-gray-500">Status</label>
               <select value={form.status} onChange={(e) => set('status', e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 mt-0.5">
+                disabled={isSaving}
+                className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50">
                 <option value="Active">Active</option>
                 <option value="Cleared">Cleared</option>
                 <option value="Lent">Lent (I gave)</option>
@@ -45,37 +70,42 @@ function DebtForm({ title, initial, onSave, onClose }) {
             <label className="text-xs text-gray-500">Name / Description</label>
             <input type="text" value={form.name} onChange={(e) => set('name', e.target.value)}
               placeholder="e.g., Friend's Loan, Gold Loan, Lent to Raju"
-              className="w-full border rounded-lg px-3 py-2 mt-0.5" />
+              disabled={isSaving}
+              className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs text-gray-500">Amount</label>
               <input type="number" inputMode="numeric" value={form.originalAmount}
                 onChange={(e) => set('originalAmount', e.target.value)}
-                placeholder="0" className="w-full border rounded-lg px-3 py-2 mt-0.5" />
+                disabled={isSaving}
+                placeholder="0" className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
             </div>
             <div>
               <label className="text-xs text-gray-500">Interest %</label>
               <input type="number" inputMode="decimal" value={form.interestRate}
                 onChange={(e) => set('interestRate', e.target.value)}
-                placeholder="0" className="w-full border rounded-lg px-3 py-2 mt-0.5" />
+                disabled={isSaving}
+                placeholder="0" className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs text-gray-500">Target Date</label>
               <input type="text" value={form.targetDate} onChange={(e) => set('targetDate', e.target.value)}
-                placeholder="e.g., Sep 2027" className="w-full border rounded-lg px-3 py-2 mt-0.5" />
+                disabled={isSaving}
+                placeholder="e.g., Sep 2027" className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
             </div>
             <div>
               <label className="text-xs text-gray-500">Debits From</label>
               <input type="text" value={form.debitsFrom} onChange={(e) => set('debitsFrom', e.target.value)}
-                placeholder="e.g., HDFC, CASH" className="w-full border rounded-lg px-3 py-2 mt-0.5" />
+                disabled={isSaving}
+                placeholder="e.g., HDFC, CASH" className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
             </div>
           </div>
-          <button onClick={() => onSave(form)}
-            className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-lg mt-2">
-            Save
+          <button onClick={handleSubmit} disabled={isSaving}
+            className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-lg mt-2 disabled:opacity-60">
+            {isSaving ? 'Saving...' : 'Save'}
           </button>
         </div>
       </div>
@@ -87,17 +117,52 @@ function PaymentForm({ debtName, outstanding = 0, initial, isEditing, onSave, on
   const today = new Date().toISOString().split('T')[0];
   const [form, setForm] = useState(initial || { month: today, amount: '', remaining: '' });
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [error, setError] = useState('');
 
   const currentOutstanding = Math.max(outstanding - (parseFloat(form.amount) || 0), 0);
+  const busy = isSaving || isDeleting;
+
+  const handleSubmit = async () => {
+    if (busy) return;
+    if (!form.amount) {
+      setError('Please enter a payment amount.');
+      return;
+    }
+    setError('');
+    setIsSaving(true);
+    try {
+      await onSave({
+        debtName, month: form.month, payment: form.amount,
+        remaining: isEditing ? form.remaining : (outstanding > 0 ? String(currentOutstanding) : form.remaining),
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (busy) return;
+    setIsDeleting(true);
+    try {
+      await onDelete();
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end">
       <div className="bg-white w-full rounded-t-2xl p-4 pb-8">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold">{isEditing ? 'Edit' : 'Record'} Payment: {debtName}</h2>
-          <button onClick={onClose} className="p-1"><X size={20} /></button>
+          <button onClick={onClose} className="p-1" disabled={busy}><X size={20} /></button>
         </div>
         <div className="space-y-3">
+          {error && (
+            <div className="bg-red-50 text-danger text-sm px-3 py-2 rounded-lg">{error}</div>
+          )}
           {!isEditing && outstanding > 0 && (
             <div className="bg-blue-50 rounded-lg p-3">
               <p className="text-xs text-gray-500">Current Outstanding</p>
@@ -107,20 +172,23 @@ function PaymentForm({ debtName, outstanding = 0, initial, isEditing, onSave, on
           <div>
             <label className="text-xs text-gray-500">Month / Date</label>
             <input type="text" value={form.month} onChange={(e) => setForm(f => ({ ...f, month: e.target.value }))}
-              placeholder="e.g., Sep 2026" className="w-full border rounded-lg px-3 py-2 mt-0.5" />
+              disabled={busy}
+              placeholder="e.g., Sep 2026" className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
           </div>
           <div>
             <label className="text-xs text-gray-500">Payment Amount</label>
             <input type="number" inputMode="numeric" value={form.amount}
               onChange={(e) => setForm(f => ({ ...f, amount: e.target.value }))}
-              placeholder="0" className="w-full border rounded-lg px-3 py-3 mt-0.5 text-xl font-bold text-center" />
+              disabled={busy}
+              placeholder="0" className="w-full border rounded-lg px-3 py-3 mt-0.5 text-xl font-bold text-center disabled:opacity-50" />
           </div>
           {isEditing && (
             <div>
               <label className="text-xs text-gray-500">Remaining Balance</label>
               <input type="number" inputMode="numeric" value={form.remaining}
                 onChange={(e) => setForm(f => ({ ...f, remaining: e.target.value }))}
-                placeholder="0" className="w-full border rounded-lg px-3 py-2 mt-0.5" />
+                disabled={busy}
+                placeholder="0" className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
             </div>
           )}
           {!isEditing && form.amount && outstanding > 0 && (
@@ -128,28 +196,26 @@ function PaymentForm({ debtName, outstanding = 0, initial, isEditing, onSave, on
               Remaining after payment: <span className="font-semibold text-gray-900">{formatCurrency(currentOutstanding)}</span>
             </p>
           )}
-          <button
-            onClick={() => onSave({
-              debtName, month: form.month, payment: form.amount,
-              remaining: isEditing ? form.remaining : (outstanding > 0 ? String(currentOutstanding) : form.remaining),
-            })}
-            className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-lg mt-2">
-            {isEditing ? 'Update Payment' : 'Save Payment'}
+          <button onClick={handleSubmit} disabled={busy}
+            className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-lg mt-2 disabled:opacity-60">
+            {isSaving ? 'Saving...' : (isEditing ? 'Update Payment' : 'Save Payment')}
           </button>
 
           {isEditing && onDelete && (
             confirmDelete ? (
               <div className="flex gap-2">
-                <button onClick={onDelete} className="flex-1 bg-danger text-white py-3 rounded-xl font-semibold text-sm">
-                  Confirm Delete
+                <button onClick={handleDelete} disabled={busy}
+                  className="flex-1 bg-danger text-white py-3 rounded-xl font-semibold text-sm disabled:opacity-60">
+                  {isDeleting ? 'Deleting...' : 'Confirm Delete'}
                 </button>
-                <button onClick={() => setConfirmDelete(false)} className="flex-1 bg-gray-100 text-gray-600 py-3 rounded-xl font-semibold text-sm">
+                <button onClick={() => setConfirmDelete(false)} disabled={busy}
+                  className="flex-1 bg-gray-100 text-gray-600 py-3 rounded-xl font-semibold text-sm disabled:opacity-60">
                   Cancel
                 </button>
               </div>
             ) : (
-              <button onClick={() => setConfirmDelete(true)}
-                className="w-full flex items-center justify-center gap-2 text-danger py-2 text-sm">
+              <button onClick={() => setConfirmDelete(true)} disabled={busy}
+                className="w-full flex items-center justify-center gap-2 text-danger py-2 text-sm disabled:opacity-60">
                 <Trash2 size={16} /> Delete this payment
               </button>
             )
@@ -161,12 +227,12 @@ function PaymentForm({ debtName, outstanding = 0, initial, isEditing, onSave, on
 }
 
 export default function DebtsPage() {
+  const { debts: debtsData } = useAppData();
   const {
     debtRows, debts, lends, payoffRows, isLoading,
     addDebt, editDebt, addPayment, editPayment, deletePayment,
     progress, paidByDebt, _debtIndexOf, _paymentIndexOf,
-  } = useDebts();
-  const { lists } = useLists();
+  } = debtsData;
   const [showForm, setShowForm] = useState(null); // null | 'add-debt' | 'add-lend' | 'payment' | 'edit' | 'edit-payment'
   const [selectedDebt, setSelectedDebt] = useState(null);
   const [editingDebt, setEditingDebt] = useState(null); // { index, data }

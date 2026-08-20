@@ -13,9 +13,14 @@ export function formatCurrency(num) {
 /**
  * Format a date string for display.
  * "2026-09-01" -> "1 Sep"
+ * Falls back to returning the raw string if it can't be parsed as a date
+ * (e.g. free-text values like "Aug 2028" used elsewhere in the app), instead
+ * of rendering "NaN undefined".
  */
 export function formatDate(dateStr) {
+  if (!dateStr) return '';
   const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
   const day = date.getDate();
   const month = date.toLocaleString('en', { month: 'short' });
   return `${day} ${month}`;

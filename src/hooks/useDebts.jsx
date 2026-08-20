@@ -17,7 +17,7 @@ export function useDebts() {
     if (!token) return;
     setIsLoading(true);
     try {
-      const data = await readSheet(token, 'Debts!A2:K');
+      const data = await readSheet(token, 'Debts!A2:K2000');
       setRawRows(data);
     } catch (err) {
       console.error('Failed to fetch Debts:', err);

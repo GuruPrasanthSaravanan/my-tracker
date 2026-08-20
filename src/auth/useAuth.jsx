@@ -24,7 +24,7 @@ export function AuthProvider({ children }) {
     }
     return sessionStorage.getItem('auth_token') || null;
   });
-  const [isLoading, setIsLoading] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const userFetched = useRef(false);
 
   const isSignedIn = !!token;
@@ -55,7 +55,23 @@ export function AuthProvider({ children }) {
       .catch(() => {});
   }, [token]);
 
+  // Centralized handling: any Sheets API call that gets a 401 dispatches this event
+  // (see src/api/sheets.js: handleResponse), so we sign out and show a clear message
+  // instead of every screen showing a generic "Failed to save/load" toast.
+  useEffect(() => {
+    const handleExpired = () => {
+      sessionStorage.removeItem('auth_token');
+      setToken(null);
+      setUser(null);
+      userFetched.current = false;
+      setSessionExpired(true);
+    };
+    window.addEventListener('mytracker:auth-expired', handleExpired);
+    return () => window.removeEventListener('mytracker:auth-expired', handleExpired);
+  }, []);
+
   const signIn = useCallback(() => {
+    setSessionExpired(false);
     // For localhost: redirect to bare origin (Google doesn't allow paths for implicit flow on localhost)
     // For production: redirect to the app path
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -82,8 +98,10 @@ export function AuthProvider({ children }) {
     sessionStorage.removeItem('auth_token');
   }, [token]);
 
+  const clearSessionExpired = useCallback(() => setSessionExpired(false), []);
+
   return (
-    <AuthContext.Provider value={{ user, token, isSignedIn, isLoading, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, token, isSignedIn, sessionExpired, clearSessionExpired, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

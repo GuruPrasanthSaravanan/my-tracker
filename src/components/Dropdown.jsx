@@ -1,9 +1,29 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { ChevronDown, Check, Plus } from 'lucide-react';
 
 export default function Dropdown({ label, options, value, onChange, onAddNew }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+  const containerRef = useRef(null);
+
+  // Close the dropdown when tapping/clicking outside of it, so it doesn't
+  // stay open and visually overlap fields below it on mobile.
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleOutside = (e) => {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setIsOpen(false);
+        setSearch('');
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('touchstart', handleOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('touchstart', handleOutside);
+    };
+  }, [isOpen]);
 
   const filtered = options.filter((opt) =>
     opt.toLowerCase().includes(search.toLowerCase())
@@ -13,18 +33,22 @@ export default function Dropdown({ label, options, value, onChange, onAddNew }) 
     (opt) => opt.toLowerCase() === search.trim().toLowerCase()
   );
 
-  const handleAddNew = () => {
+  const handleAddNew = async () => {
     const newValue = search.trim();
-    if (newValue) {
-      onAddNew(newValue);
-      onChange(newValue);
+    if (!newValue || isAdding) return;
+    setIsAdding(true);
+    try {
+      const resolvedValue = await onAddNew(newValue);
+      onChange(resolvedValue || newValue);
       setIsOpen(false);
       setSearch('');
+    } finally {
+      setIsAdding(false);
     }
   };
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <label className="text-xs text-gray-500">{label}</label>
       <button
         onClick={() => setIsOpen(!isOpen)}
@@ -42,15 +66,17 @@ export default function Dropdown({ label, options, value, onChange, onAddNew }) 
             <input
               type="text" placeholder={`Search or type new ${label.toLowerCase()}...`} value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full px-2 py-1 text-sm border rounded" autoFocus
+              disabled={isAdding}
+              className="w-full px-2 py-1 text-sm border rounded disabled:opacity-50" autoFocus
             />
           </div>
           {showAddNew && (
             <button
               onClick={handleAddNew}
-              className="w-full px-3 py-2 text-left text-sm text-primary font-medium flex items-center gap-1 hover:bg-blue-50 border-b"
+              disabled={isAdding}
+              className="w-full px-3 py-2 text-left text-sm text-primary font-medium flex items-center gap-1 hover:bg-blue-50 border-b disabled:opacity-60"
             >
-              <Plus size={14} /> Add "{search.trim()}"
+              <Plus size={14} /> {isAdding ? 'Adding...' : `Add "${search.trim()}"`}
             </button>
           )}
           {filtered.map((opt) => (

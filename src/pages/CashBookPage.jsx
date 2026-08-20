@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { useCashBook } from '../hooks/useCashBook';
-import { useLists } from '../hooks/useLists';
+import { useAppData } from '../contexts/DataContext';
 import SummaryCard from '../components/SummaryCard';
 import TransactionRow from '../components/TransactionRow';
 import FAB from '../components/FAB';
@@ -10,8 +9,9 @@ import EntryForm from '../components/EntryForm';
 import { formatCurrency } from '../utils/formatters';
 
 export default function CashBookPage() {
-  const { rows, isLoading, addEntry, editEntry, deleteEntry, totalBalance, accountBalances } = useCashBook();
-  const { lists, addListItem } = useLists();
+  const { cashBook, lists: listsData } = useAppData();
+  const { rows, isLoading, addEntry, editEntry, deleteEntry, totalBalance, accountBalances } = cashBook;
+  const { lists, addListItem } = listsData;
   const [showForm, setShowForm] = useState(false);
   const [editingRow, setEditingRow] = useState(null); // { index, data }
   const [toast, setToast] = useState(null);

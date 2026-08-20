@@ -3,6 +3,29 @@ import { SPREADSHEET_ID } from '../config';
 const BASE_URL = 'https://sheets.googleapis.com/v4/spreadsheets';
 
 /**
+ * Shared response handler for all Sheets API calls.
+ * - On 401 (expired/invalid token): dispatches a 'mytracker:auth-expired' event so
+ *   useAuth can sign the user out and show a clear "session expired" message,
+ *   instead of every caller showing a generic "Failed to save" toast.
+ * - On 429 (rate limited): throws a specific, user-actionable message.
+ */
+async function handleResponse(res) {
+  if (res.ok) return res;
+
+  if (res.status === 401) {
+    window.dispatchEvent(new CustomEvent('mytracker:auth-expired'));
+    throw new Error('Your session expired. Please sign in again.');
+  }
+
+  if (res.status === 429) {
+    throw new Error('Too many requests right now. Please wait a moment and try again.');
+  }
+
+  const error = await res.json().catch(() => ({}));
+  throw new Error(error.error?.message || `Sheets API error: ${res.status}`);
+}
+
+/**
  * Read a range from the spreadsheet.
  * @param {string} token - OAuth access token
  * @param {string} range - e.g., "CashBook!A2:G"
@@ -13,10 +36,7 @@ export async function readSheet(token, range) {
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({}));
-    throw new Error(error.error?.message || `Sheets API error: ${res.status}`);
-  }
+  await handleResponse(res);
   const data = await res.json();
   return data.values || [];
 }
@@ -37,10 +57,7 @@ export async function appendRow(token, range, values) {
     },
     body: JSON.stringify({ values: [values] }),
   });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({}));
-    throw new Error(error.error?.message || `Sheets API error: ${res.status}`);
-  }
+  await handleResponse(res);
 }
 
 /**
@@ -59,10 +76,7 @@ export async function updateRow(token, range, values) {
     },
     body: JSON.stringify({ values: [values] }),
   });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({}));
-    throw new Error(error.error?.message || `Sheets API error: ${res.status}`);
-  }
+  await handleResponse(res);
 }
 
 /**
@@ -76,8 +90,5 @@ export async function clearRow(token, range) {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({}));
-    throw new Error(error.error?.message || `Sheets API error: ${res.status}`);
-  }
+  await handleResponse(res);
 }
