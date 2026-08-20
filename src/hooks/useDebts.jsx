@@ -30,10 +30,14 @@ export function useDebts() {
 
   for (let i = 0; i < rawRows.length; i++) {
     const row = rawRows[i];
-    if (row[0] && !isNaN(parseInt(row[0]))) {
+    const hasNumericPriority = row[0] && !isNaN(parseInt(row[0]));
+    const hasStatus = row[6] && ['active', 'cleared', 'lent', 'recovered'].includes((row[6] || '').toLowerCase());
+    if (hasNumericPriority || hasStatus) {
+      // Debt/lend entry row
       rowIndexMap.push(i);
       debtRows.push(row);
-    } else if (row[0] && row[1]) {
+    } else if (row[0] && row[1] && !hasStatus) {
+      // Payoff tracking row
       payoffRows.push({
         debtName: row[0] || '',
         month: row[1] || '',
