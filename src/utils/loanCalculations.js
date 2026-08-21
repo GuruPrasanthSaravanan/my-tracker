@@ -33,18 +33,23 @@ export function calculateEMI(principal, annualRate, tenureMonths) {
 
 /**
  * Builds the full month-by-month amortization schedule for an EMI loan.
+ * Stops early (before tenureMonths) if extra/part-payments pay off the
+ * balance ahead of schedule.
  * @param {number} principal
  * @param {number} annualRate
  * @param {number} tenureMonths
- * @returns {{ month: number, emi: number, interest: number, principal: number, balance: number }[]}
+ * @param {Object<number, number>} extraPaymentsByMonth - optional map of
+ *   1-based month number -> extra amount paid toward principal that month
+ *   (on top of the regular EMI), e.g. a part-payment/prepayment.
+ * @returns {{ month: number, emi: number, interest: number, principal: number, extraPayment: number, balance: number }[]}
  */
-export function buildAmortizationSchedule(principal, annualRate, tenureMonths) {
+export function buildAmortizationSchedule(principal, annualRate, tenureMonths, extraPaymentsByMonth = {}) {
   const r = annualRate / 12 / 100;
   const emi = calculateEMI(principal, annualRate, tenureMonths);
   const schedule = [];
   let balance = principal;
 
-  for (let month = 1; month <= tenureMonths; month++) {
+  for (let month = 1; month <= tenureMonths && balance > 0.01; month++) {
     const interest = balance * r;
     let principalComponent = emi - interest;
     // Zero out rounding residue on the final installment.
@@ -52,11 +57,20 @@ export function buildAmortizationSchedule(principal, annualRate, tenureMonths) {
       principalComponent = balance;
     }
     balance = Math.max(balance - principalComponent, 0);
+
+    // Apply any extra/part-payment for this month, entirely toward principal
+    // (the regular EMI above already covers this month's interest).
+    const extra = extraPaymentsByMonth[month] || 0;
+    const extraApplied = extra > 0 ? Math.min(extra, balance) : 0;
+    balance = Math.max(balance - extraApplied, 0);
+
+    const isFinalRow = balance <= 0.01;
     schedule.push({
       month,
-      emi: month === tenureMonths ? interest + principalComponent : emi,
+      emi: isFinalRow ? interest + principalComponent + extraApplied : emi,
       interest,
-      principal: principalComponent,
+      principal: principalComponent + extraApplied,
+      extraPayment: extraApplied,
       balance,
     });
   }
@@ -67,11 +81,14 @@ export function buildAmortizationSchedule(principal, annualRate, tenureMonths) {
 /**
  * Computes the current status of an EMI loan as of a given date, assuming
  * on-time monthly payments since startDate: how many installments have
- * elapsed, totals paid so far, and the outstanding balance.
+ * elapsed, totals paid so far, and the outstanding balance. Optionally takes
+ * a list of extra/part-payments which accelerate payoff (see
+ * buildAmortizationSchedule).
  * @param {{ principal: number, annualRate: number, tenureMonths: number, startDate: string }} loan
  * @param {string|Date} asOfDate
+ * @param {{ date: string, amount: number }[]} extraPayments
  */
-export function computeEMIStatus(loan, asOfDate = new Date()) {
+export function computeEMIStatus(loan, asOfDate = new Date(), extraPayments = []) {
   const { principal, annualRate, tenureMonths } = loan;
   const start = new Date(loan.startDate);
   const now = new Date(asOfDate);
@@ -80,11 +97,24 @@ export function computeEMIStatus(loan, asOfDate = new Date()) {
     0,
     (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth())
   );
-  const installmentsPaid = Math.min(monthsElapsed, tenureMonths);
 
-  const schedule = buildAmortizationSchedule(principal, annualRate, tenureMonths);
+  // Convert each extra payment's date into a 1-based month offset from the
+  // loan start date, so it lands in the correct row of the schedule.
+  const extraPaymentsByMonth = {};
+  for (const p of extraPayments) {
+    const pDate = new Date(p.date);
+    const monthOffset = Math.max(
+      1,
+      (pDate.getFullYear() - start.getFullYear()) * 12 + (pDate.getMonth() - start.getMonth()) + 1
+    );
+    extraPaymentsByMonth[monthOffset] = (extraPaymentsByMonth[monthOffset] || 0) + p.amount;
+  }
+
+  const schedule = buildAmortizationSchedule(principal, annualRate, tenureMonths, extraPaymentsByMonth);
+  // The schedule may be shorter than tenureMonths if prepayments closed it early.
+  const installmentsPaid = Math.min(monthsElapsed, schedule.length);
+
   const paidRows = schedule.slice(0, installmentsPaid);
-
   const totalInterestPaid = paidRows.reduce((sum, row) => sum + row.interest, 0);
   const totalPrincipalPaid = paidRows.reduce((sum, row) => sum + row.principal, 0);
   const outstandingBalance = installmentsPaid > 0
@@ -93,16 +123,25 @@ export function computeEMIStatus(loan, asOfDate = new Date()) {
 
   const emi = calculateEMI(principal, annualRate, tenureMonths);
   const totalInterestPayable = schedule.reduce((sum, row) => sum + row.interest, 0);
+  const totalExtraPaid = extraPayments.reduce((sum, p) => sum + p.amount, 0);
+
+  // Next EMI due date = start date + installmentsPaid months.
+  const nextDueDate = new Date(start);
+  nextDueDate.setMonth(nextDueDate.getMonth() + installmentsPaid);
 
   return {
     emi,
     installmentsPaid,
-    installmentsRemaining: tenureMonths - installmentsPaid,
+    installmentsRemaining: schedule.length - installmentsPaid,
+    effectiveTenureMonths: schedule.length, // may be < tenureMonths if prepaid early
+    originalTenureMonths: tenureMonths,
     totalInterestPaid,
     totalPrincipalPaid,
+    totalExtraPaid,
     outstandingBalance,
     totalInterestPayable,
-    isComplete: installmentsPaid >= tenureMonths,
+    isComplete: outstandingBalance <= 0.01,
+    nextDueDate: outstandingBalance > 0.01 ? nextDueDate.toISOString().split('T')[0] : null,
   };
 }
 
@@ -151,4 +190,81 @@ export function splitPayment(paymentAmount, interestDue) {
   const principalPaid = Math.max(paymentAmount - interestDue, 0);
   const remainingInterestDue = Math.max(interestDue - paymentAmount, 0);
   return { interestPaid, principalPaid, remainingInterestDue };
+}
+
+// ---------------------------------------------------------------------------
+// Credit Card billing (Indian bank conventions: HDFC/ICICI/Axis/SBI etc.)
+// ---------------------------------------------------------------------------
+
+/**
+ * Computes the Minimum Amount Due (MAD) for a credit card bill.
+ * Standard Indian bank formula: ~5% of the revolving balance (excluding
+ * fixed EMI/fee components, which are billed at 100%), plus any overlimit
+ * amount, floored at a small minimum amount.
+ * @param {{ totalAmountDue: number, emiComponent?: number, overlimitAmount?: number }} bill
+ * @param {number} minDuePercent - defaults to 5 (%)
+ * @param {number} floorAmount - defaults to 200 (₹)
+ */
+export function computeMinimumDue(bill, minDuePercent = 5, floorAmount = 200) {
+  const emiComponent = bill.emiComponent || 0;
+  const overlimitAmount = bill.overlimitAmount || 0;
+  const revolvingBalance = Math.max(bill.totalAmountDue - emiComponent - overlimitAmount, 0);
+
+  const mad = Math.max((revolvingBalance * minDuePercent) / 100, floorAmount) + emiComponent + overlimitAmount;
+  return Math.min(Math.round(mad), bill.totalAmountDue);
+}
+
+/**
+ * Projects how long it will take to pay off a credit card balance, and the
+ * total interest paid, if only a percentage-of-balance minimum payment is
+ * made each month (standard "minimum due" trap simulation used by
+ * BankBazaar/Paisabazaar/CRED-style calculators).
+ * @param {number} outstanding - current balance to pay off
+ * @param {number} monthlyRatePercent - monthly interest rate as a percentage (e.g. 3.5 for 3.5%/month)
+ * @param {number} minDuePercent - percentage of balance charged as minimum due each month (default 5)
+ * @param {number} floorAmount - minimum payment floor (default 200)
+ * @param {number} maxMonths - safety cap to avoid infinite loops (default 600 = 50 years)
+ * @returns {{ monthsToPayoff: number|null, totalInterestPaid: number, schedule: object[], neverPaysOff: boolean }}
+ */
+export function projectCreditCardPayoff(outstanding, monthlyRatePercent, minDuePercent = 5, floorAmount = 200, maxMonths = 600) {
+  const monthlyRate = monthlyRatePercent / 100;
+  const minRate = minDuePercent / 100;
+
+  // If the minimum-due percentage doesn't even cover the monthly interest
+  // rate, the balance will never reduce - flag this instead of looping forever.
+  if (minRate <= monthlyRate) {
+    return { monthsToPayoff: null, totalInterestPaid: 0, schedule: [], neverPaysOff: true };
+  }
+
+  let balance = outstanding;
+  let totalInterest = 0;
+  let months = 0;
+  const schedule = [];
+
+  while (balance > 1 && months < maxMonths) {
+    const interest = balance * monthlyRate;
+    const balanceWithInterest = balance + interest;
+    let payment = Math.max(minRate * balanceWithInterest, floorAmount);
+    payment = Math.min(payment, balanceWithInterest);
+
+    const openingBalance = balance;
+    balance = balanceWithInterest - payment;
+    totalInterest += interest;
+    months += 1;
+
+    schedule.push({
+      month: months,
+      openingBalance,
+      interest,
+      payment,
+      closingBalance: balance,
+    });
+  }
+
+  return {
+    monthsToPayoff: balance <= 1 ? months : null,
+    totalInterestPaid: totalInterest,
+    schedule,
+    neverPaysOff: balance > 1,
+  };
 }

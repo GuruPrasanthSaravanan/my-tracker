@@ -6,6 +6,8 @@ import {
   computeSimpleInterestAccrued,
   splitPayment,
   presentValueOfAnnuity,
+  computeMinimumDue,
+  projectCreditCardPayoff,
 } from '../../src/utils/loanCalculations';
 
 describe('calculateEMI', () => {
@@ -44,6 +46,22 @@ describe('buildAmortizationSchedule', () => {
   });
 });
 
+describe('buildAmortizationSchedule with prepayments', () => {
+  it('pays off the loan earlier than the original tenure when a part-payment is made', () => {
+    const normal = buildAmortizationSchedule(100000, 12, 12);
+    const withExtra = buildAmortizationSchedule(100000, 12, 12, { 3: 30000 });
+
+    expect(withExtra.length).toBeLessThan(normal.length);
+    expect(withExtra[2].extraPayment).toBe(30000);
+    expect(withExtra[withExtra.length - 1].balance).toBeCloseTo(0, 1);
+
+    // Total interest paid should be less than without the prepayment.
+    const totalInterestNormal = normal.reduce((s, r) => s + r.interest, 0);
+    const totalInterestExtra = withExtra.reduce((s, r) => s + r.interest, 0);
+    expect(totalInterestExtra).toBeLessThan(totalInterestNormal);
+  });
+});
+
 describe('computeEMIStatus', () => {
   it('computes elapsed installments, outstanding balance, and totals as of a given date', () => {
     const status = computeEMIStatus({
@@ -70,6 +88,19 @@ describe('computeEMIStatus', () => {
 
     expect(status.installmentsPaid).toBe(12);
     expect(status.outstandingBalance).toBeCloseTo(0, 1);
+  });
+
+  it('computes a next due date and reflects part-payments shortening the effective tenure', () => {
+    const status = computeEMIStatus({
+      principal: 100000,
+      annualRate: 12,
+      tenureMonths: 12,
+      startDate: '2026-01-01',
+    }, '2026-04-01', [{ date: '2026-02-15', amount: 30000 }]);
+
+    expect(status.effectiveTenureMonths).toBeLessThan(status.originalTenureMonths);
+    expect(status.totalExtraPaid).toBe(30000);
+    expect(status.nextDueDate).toBe('2026-04-01');
   });
 });
 
@@ -125,5 +156,46 @@ describe('splitPayment', () => {
     expect(result.interestPaid).toBe(6000);
     expect(result.principalPaid).toBe(0);
     expect(result.remainingInterestDue).toBe(0);
+  });
+});
+
+describe('computeMinimumDue', () => {
+  it('computes ~5% of the revolving balance, floored at a minimum amount', () => {
+    const mad = computeMinimumDue({ totalAmountDue: 50000 });
+    expect(mad).toBe(2500); // 5% of 50000
+  });
+
+  it('applies the floor amount for small balances', () => {
+    const mad = computeMinimumDue({ totalAmountDue: 1000 });
+    expect(mad).toBe(200); // floor, since 5% of 1000 = 50 < 200
+  });
+
+  it('adds EMI and overlimit components at 100%', () => {
+    const mad = computeMinimumDue({ totalAmountDue: 50000, emiComponent: 5000, overlimitAmount: 1000 });
+    // 5% of (50000 - 5000 - 1000) = 2200, plus emi 5000, plus overlimit 1000 = 8200
+    expect(mad).toBe(8200);
+  });
+
+  it('never exceeds the total amount due', () => {
+    const mad = computeMinimumDue({ totalAmountDue: 100 });
+    expect(mad).toBe(100);
+  });
+});
+
+describe('projectCreditCardPayoff', () => {
+  it('projects months to payoff and total interest when paying only minimum due', () => {
+    const result = projectCreditCardPayoff(50000, 3.5);
+    expect(result.neverPaysOff).toBe(false);
+    expect(result.monthsToPayoff).toBeGreaterThan(0);
+    expect(result.totalInterestPaid).toBeGreaterThan(0);
+    expect(result.schedule.length).toBe(result.monthsToPayoff);
+    // Balance should trend downward.
+    expect(result.schedule[result.schedule.length - 1].closingBalance).toBeLessThan(1);
+  });
+
+  it('flags when the minimum-due percentage cannot outpace the interest rate', () => {
+    const result = projectCreditCardPayoff(50000, 6, 5); // 6%/mo interest > 5% min-due rate
+    expect(result.neverPaysOff).toBe(true);
+    expect(result.monthsToPayoff).toBeNull();
   });
 });

@@ -126,8 +126,11 @@
 
     const TAB_SCHEMAS = {
       EMILoans: ['Name', 'Principal', 'AnnualRate', 'TenureMonths', 'StartDate', 'DebitsFrom', 'Status', 'Notes'],
+      EMIPrepayments: ['LoanName', 'Date', 'Amount', 'Notes'],
       HandLoans: ['Name', 'Principal', 'AnnualRate', 'StartDate', 'Direction', 'DebitsFrom', 'Status', 'Notes'],
       HandLoanPayments: ['LoanName', 'Date', 'Amount', 'InterestPaid', 'PrincipalPaid', 'RemainingPrincipal'],
+      CreditCards: ['Name', 'CreditLimit', 'InterestRateMonthly', 'DebitsFrom', 'Status', 'Notes'],
+      CreditCardBills: ['CardName', 'StatementDate', 'DueDate', 'TotalAmountDue', 'MinimumAmountDue', 'PaymentMade', 'PaymentDate', 'Notes'],
     };
 
     async function ensureAllTabsExist() {

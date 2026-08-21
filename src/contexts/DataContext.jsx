@@ -4,6 +4,7 @@ import { useVendors } from '../hooks/useVendors';
 import { useProjects } from '../hooks/useProjects';
 import { useEMILoans } from '../hooks/useEMILoans';
 import { useHandLoans } from '../hooks/useHandLoans';
+import { useCreditCards } from '../hooks/useCreditCards';
 import { useLists } from '../hooks/useLists';
 import { useAccountSettings } from '../hooks/useAccountSettings';
 
@@ -27,11 +28,12 @@ export function DataProvider({ children }) {
   const projects = useProjects();
   const emiLoans = useEMILoans();
   const handLoans = useHandLoans();
+  const creditCards = useCreditCards();
   const lists = useLists();
   const accountSettings = useAccountSettings();
 
   return (
-    <DataContext.Provider value={{ cashBook, vendors, projects, emiLoans, handLoans, lists, accountSettings }}>
+    <DataContext.Provider value={{ cashBook, vendors, projects, emiLoans, handLoans, creditCards, lists, accountSettings }}>
       {children}
     </DataContext.Provider>
   );
