@@ -263,9 +263,11 @@ export default function DebtsPage() {
             ) : handLoans.debts.length === 0 ? (
               <p className="text-center text-gray-400 py-4">No hand loans tracked.</p>
             ) : (
-              handLoans.debts.map((loan) => (
-                <HandLoanRow key={loan._rowIndex} loan={loan} onClick={() => setSelectedHandLoan(loan)} />
-              ))
+              <div className="space-y-3">
+                {handLoans.debts.map((loan) => (
+                  <HandLoanRow key={loan._rowIndex} loan={loan} onClick={() => setSelectedHandLoan(loan)} />
+                ))}
+              </div>
             )}
           </div>
 
@@ -285,9 +287,11 @@ export default function DebtsPage() {
             {handLoans.lends.length === 0 ? (
               <p className="text-center text-gray-400 py-4">No money lent out.</p>
             ) : (
-              handLoans.lends.map((loan) => (
-                <HandLoanRow key={loan._rowIndex} loan={loan} onClick={() => setSelectedHandLoan(loan)} />
-              ))
+              <div className="space-y-3">
+                {handLoans.lends.map((loan) => (
+                  <HandLoanRow key={loan._rowIndex} loan={loan} onClick={() => setSelectedHandLoan(loan)} />
+                ))}
+              </div>
             )}
           </div>
         </div>
