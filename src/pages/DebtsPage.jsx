@@ -4,7 +4,6 @@ import ProgressBar from '../components/ProgressBar';
 import DebtRow from '../components/DebtRow';
 import Toast from '../components/Toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
-import MonthYearPicker from '../components/MonthYearPicker';
 import { formatCurrency } from '../utils/formatters';
 import { X, Plus, Pencil, Trash2 } from 'lucide-react';
 
@@ -91,13 +90,18 @@ function DebtForm({ title, initial, onSave, onClose }) {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <MonthYearPicker
-              label="Target Date"
-              value={form.targetDate}
-              onChange={(v) => set('targetDate', v)}
-              placeholder="e.g., Sep 2027"
-              disabled={isSaving}
-            />
+            <div>
+              <label className="text-xs text-gray-500">Target Date</label>
+              <input type="date" value={form.targetDate}
+                onChange={(e) => {
+                  const val = e.target.value; // yyyy-mm-dd
+                  // Normalize to the 1st of the picked month, since this
+                  // field represents a target month, not a specific day.
+                  set('targetDate', val ? `${val.slice(0, 7)}-01` : '');
+                }}
+                disabled={isSaving}
+                className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
+            </div>
             <div>
               <label className="text-xs text-gray-500">Debits From</label>
               <input type="text" value={form.debitsFrom} onChange={(e) => set('debitsFrom', e.target.value)}
