@@ -16,12 +16,26 @@ export default function DashboardPage() {
 
   const activeProjects = projects.projects.filter((p) => p.status !== 'Completed');
 
-  // Nearest upcoming project milestone (not yet done/cancelled, with a planned date today or later).
+  // Unified "what's due next" across every source that has a real due date:
+  // project milestones, EMI installments, and Credit Card bills. (Hand Loans
+  // don't have a structured due date field - they're bullet-repayment loans
+  // settled at renewal/closure, not on a fixed monthly schedule - see
+  // bugs-and-lessons.md §9 for the EMI-vs-hand-loan distinction.)
   const today = getTodayISO();
-  const upcomingMilestones = projects.milestones
-    .filter((m) => m.plannedDate && m.plannedDate >= today && m.status !== 'Done' && m.status !== 'Cancelled')
-    .sort((a, b) => a.plannedDate.localeCompare(b.plannedDate));
-  const nextMilestone = upcomingMilestones[0];
+  const dueItems = [
+    ...projects.milestones
+      .filter((m) => m.plannedDate && m.status !== 'Done' && m.status !== 'Cancelled')
+      .map((m) => ({ type: 'Milestone', label: `${m.milestone} (${m.project})`, date: m.plannedDate, to: '/projects' })),
+    ...emiLoans.loans
+      .filter((l) => l.status !== 'Closed' && l.emiStatus?.nextDueDate)
+      .map((l) => ({ type: 'EMI', label: `${l.name} EMI (${formatCurrency(l.emiStatus.emi)})`, date: l.emiStatus.nextDueDate, to: '/debts' })),
+    ...creditCards.cards
+      .filter((c) => c.latestBill && !c.isPaidInFull)
+      .map((c) => ({ type: 'Credit Card', label: `${c.name} bill (${formatCurrency(c.outstanding)})`, date: c.latestBill.dueDate, to: '/debts' })),
+  ]
+    .filter((item) => item.date >= today)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  const nextDue = dueItems[0];
 
   const quickActions = [
     { label: 'Add CashBook Entry', onClick: () => navigate('/cashbook') },
@@ -60,15 +74,13 @@ export default function DashboardPage() {
         <span>Outflow: <span className="text-gray-900 font-medium">{formatCurrency(totalOut)}</span></span>
       </div>
 
-      {/* Next milestone */}
-      {nextMilestone && (
-        <div className="bg-amber-50 rounded-2xl p-4">
-          <p className="text-xs text-amber-700 font-semibold">Next Milestone</p>
-          <p className="text-sm text-gray-900 font-medium mt-0.5">
-            {nextMilestone.milestone} ({nextMilestone.project})
-          </p>
-          <p className="text-xs text-gray-500 mt-0.5">Planned: {formatDate(nextMilestone.plannedDate)}</p>
-        </div>
+      {/* Next due (nearest of: milestone, EMI, or credit card bill) */}
+      {nextDue && (
+        <button onClick={() => navigate(nextDue.to)} className="w-full bg-amber-50 rounded-2xl p-4 text-left">
+          <p className="text-xs text-amber-700 font-semibold">Next Due - {nextDue.type}</p>
+          <p className="text-sm text-gray-900 font-medium mt-0.5">{nextDue.label}</p>
+          <p className="text-xs text-gray-500 mt-0.5">{formatDate(nextDue.date)}</p>
+        </button>
       )}
 
       {/* Quick actions */}

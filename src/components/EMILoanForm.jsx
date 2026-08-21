@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { getTodayISO } from '../utils/formatters';
+import Dropdown from './Dropdown';
 
-export default function EMILoanForm({ initial, onSave, onDelete, onClose }) {
+export default function EMILoanForm({ initial, onSave, onDelete, onClose, accountOptions = [], onAddAccount }) {
   const [form, setForm] = useState(initial || {
     name: '', principal: '', annualRate: '', tenureMonths: '',
     startDate: getTodayISO(), debitsFrom: '', status: 'Active', notes: '',
@@ -103,12 +104,13 @@ export default function EMILoanForm({ initial, onSave, onDelete, onClose }) {
             your bank statement exactly if it's rounded differently from the calculated value.
           </p>
           <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-gray-500">Debits From</label>
-              <input type="text" value={form.debitsFrom} onChange={(e) => set('debitsFrom', e.target.value)}
-                placeholder="e.g., HDFC" disabled={busy}
-                className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
-            </div>
+            <Dropdown
+              label="Debits From"
+              options={accountOptions}
+              value={form.debitsFrom}
+              onChange={(v) => set('debitsFrom', v)}
+              onAddNew={onAddAccount}
+            />
             <div>
               <label className="text-xs text-gray-500">Status</label>
               <select value={form.status} onChange={(e) => set('status', e.target.value)} disabled={busy}

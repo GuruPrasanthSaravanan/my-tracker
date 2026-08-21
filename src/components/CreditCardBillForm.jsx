@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { computeMinimumDue } from '../utils/loanCalculations';
 import { getTodayISO, addDaysISO } from '../utils/formatters';
+import CashBookLinkToggle from './CashBookLinkToggle';
 
-export default function CreditCardBillForm({ cardName, initial, isEditing, prefillTotalAmountDue, onSave, onDelete, onClose }) {
+export default function CreditCardBillForm({ cardName, defaultAccount, accountOptions = [], onAddAccount, initial, isEditing, prefillTotalAmountDue, onSave, onDelete, onClose }) {
   const [form, setForm] = useState(initial || {
     statementDate: getTodayISO(),
     dueDate: addDaysISO(getTodayISO(), 20), // Indian banks: ~20 days after statement date
@@ -13,6 +14,13 @@ export default function CreditCardBillForm({ cardName, initial, isEditing, prefi
     paymentDate: '',
     notes: prefillTotalAmountDue != null ? 'Amount estimated from CashBook spend - verify against your actual statement.' : '',
   });
+  // A brand-new bill (or one that had no payment recorded yet) defaults to
+  // logging in CashBook once a payment amount is entered; editing a bill that
+  // already had a payment recorded defaults to unchecked, to avoid silently
+  // double-logging the same payment on every subsequent edit.
+  const alreadyHadPayment = (parseFloat(initial?.paymentMade) || 0) > 0;
+  const [logToCashBook, setLogToCashBook] = useState(!alreadyHadPayment);
+  const [cashBookAccount, setCashBookAccount] = useState(defaultAccount || '');
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -24,11 +32,16 @@ export default function CreditCardBillForm({ cardName, initial, isEditing, prefi
     ? computeMinimumDue({ totalAmountDue: parseFloat(form.totalAmountDue) || 0 })
     : 0;
 
+  const hasNewPayment = (parseFloat(form.paymentMade) || 0) > 0 && !alreadyHadPayment;
+
   const handleSubmit = async () => {
     if (busy) return;
     if (!form.statementDate) return setError('Please enter the statement date.');
     if (!form.dueDate) return setError('Please enter the due date.');
     if (!form.totalAmountDue) return setError('Please enter the total amount due.');
+    if (hasNewPayment && logToCashBook && !cashBookAccount) {
+      return setError('Please choose an account to log this payment in CashBook, or uncheck the option.');
+    }
     setError('');
     setIsSaving(true);
     try {
@@ -40,6 +53,8 @@ export default function CreditCardBillForm({ cardName, initial, isEditing, prefi
         // marked estimated; editing an existing bill always confirms/corrects it
         // (see useCreditCards.editBill, which clears this regardless of what's passed).
         isEstimated: !isEditing && prefillTotalAmountDue != null,
+        logToCashBook: hasNewPayment && logToCashBook,
+        cashBookAccount: hasNewPayment && logToCashBook ? cashBookAccount : null,
       });
     } finally {
       setIsSaving(false);
@@ -122,6 +137,18 @@ export default function CreditCardBillForm({ cardName, initial, isEditing, prefi
             Paying less than the full amount loses the interest-free period - interest accrues on the
             remaining balance until fully paid.
           </p>
+
+          {hasNewPayment && (
+            <CashBookLinkToggle
+              checked={logToCashBook}
+              onCheckedChange={setLogToCashBook}
+              account={cashBookAccount}
+              onAccountChange={setCashBookAccount}
+              accountOptions={accountOptions}
+              onAddAccount={onAddAccount}
+              disabled={busy}
+            />
+          )}
 
           <button onClick={handleSubmit} disabled={busy}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-lg mt-2 disabled:opacity-60">

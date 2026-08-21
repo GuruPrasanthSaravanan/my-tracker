@@ -25,7 +25,9 @@ const SECTIONS = [
 ];
 
 export default function DebtsPage() {
-  const { emiLoans, handLoans, creditCards, cashBook } = useAppData();
+  const { emiLoans, handLoans, creditCards, cashBook, lists } = useAppData();
+  const accountOptions = lists.lists.accounts || [];
+  const handleAddAccount = (value) => lists.addListItem('accounts', value);
   const [section, setSection] = useState('emi');
   const [toast, setToast] = useState(null);
   const notify = (message, type = 'success') => setToast({ message, type });
@@ -78,12 +80,18 @@ export default function DebtsPage() {
     } catch { onErr(); }
   };
 
-  const handleSavePrepayment = async ({ date, amount, notes }) => {
+  const handleSavePrepayment = async ({ date, amount, notes, logToCashBook, cashBookAccount }) => {
     try {
       if (editingPrepayment) {
         await emiLoans.editPrepayment(editingPrepayment._rowIndex, [selectedEMILoan.name, date, amount, notes]);
       } else {
         await emiLoans.addPrepayment(selectedEMILoan.name, date, amount, notes);
+        if (logToCashBook && cashBookAccount) {
+          await cashBook.addEntry({
+            date, description: `${selectedEMILoan.name} - part-payment`,
+            account: cashBookAccount, type: 'EMI', moneyOut: amount,
+          });
+        }
       }
       setShowPrepaymentForm(false);
       setEditingPrepayment(null);
@@ -125,9 +133,20 @@ export default function DebtsPage() {
     } catch { onErr(); }
   };
 
-  const handleRecordHandPayment = async (amount, date) => {
+  const handleRecordHandPayment = async (amount, date, logToCashBook, cashBookAccount) => {
     try {
       await handLoans.addPayment(selectedHandLoan.name, amount, date);
+      if (logToCashBook && cashBookAccount) {
+        const isLent = selectedHandLoan.direction === 'Lent';
+        await cashBook.addEntry({
+          date, description: `${selectedHandLoan.name} - payment ${isLent ? 'received' : 'made'}`,
+          account: cashBookAccount, type: 'DEBT',
+          // A loan we lent money on: a payment coming back in is Money IN. A
+          // loan we owe: a payment going out is Money OUT.
+          moneyIn: isLent ? amount : undefined,
+          moneyOut: isLent ? undefined : amount,
+        });
+      }
       setShowHandPaymentForm(false);
       setSelectedHandLoan(null);
       notify('Payment recorded!');
@@ -182,6 +201,12 @@ export default function DebtsPage() {
         await creditCards.editBill(editingBill._rowIndex, entry);
       } else {
         await creditCards.addBill(entry);
+      }
+      if (entry.logToCashBook && entry.cashBookAccount) {
+        await cashBook.addEntry({
+          date: entry.paymentDate || entry.dueDate, description: `${entry.cardName} - bill payment`,
+          account: entry.cashBookAccount, type: 'CC', moneyOut: entry.paymentMade,
+        });
       }
       setShowBillForm(false);
       setEditingBill(null);
@@ -337,7 +362,8 @@ export default function DebtsPage() {
 
       {/* ===== EMI Modals ===== */}
       {showEMIForm && !editingEMILoan && (
-        <EMILoanForm onSave={handleSaveEMI} onClose={() => setShowEMIForm(false)} />
+        <EMILoanForm onSave={handleSaveEMI} onClose={() => setShowEMIForm(false)}
+          accountOptions={accountOptions} onAddAccount={handleAddAccount} />
       )}
 
       {selectedEMILoan && !editingEMILoan && !showEMIForm && !showPrepaymentForm && (
@@ -366,6 +392,7 @@ export default function DebtsPage() {
           }}
           onSave={handleSaveEMI}
           onDelete={handleDeleteEMI}
+          accountOptions={accountOptions} onAddAccount={handleAddAccount}
           onClose={() => { setEditingEMILoan(false); setSelectedEMILoan(null); }}
         />
       )}
@@ -374,6 +401,8 @@ export default function DebtsPage() {
         <EMIPrepaymentForm
           loanName={selectedEMILoan.name}
           outstandingBalance={selectedEMILoan.emiStatus?.outstandingBalance}
+          defaultAccount={selectedEMILoan.debitsFrom}
+          accountOptions={accountOptions} onAddAccount={handleAddAccount}
           initial={editingPrepayment}
           isEditing={!!editingPrepayment}
           onSave={handleSavePrepayment}
@@ -384,7 +413,8 @@ export default function DebtsPage() {
 
       {/* ===== Hand Loan Modals ===== */}
       {showHandForm && !editingHandLoan && (
-        <HandLoanForm direction={showHandForm} onSave={handleSaveHandLoan} onClose={() => setShowHandForm(null)} />
+        <HandLoanForm direction={showHandForm} onSave={handleSaveHandLoan} onClose={() => setShowHandForm(null)}
+          accountOptions={accountOptions} onAddAccount={handleAddAccount} />
       )}
 
       {selectedHandLoan && !editingHandLoan && !showHandPaymentForm && !editingHandPayment && (
@@ -411,6 +441,7 @@ export default function DebtsPage() {
           }}
           onSave={handleSaveHandLoan}
           onDelete={handleDeleteHandLoan}
+          accountOptions={accountOptions} onAddAccount={handleAddAccount}
           onClose={() => { setEditingHandLoan(false); setSelectedHandLoan(null); }}
         />
       )}
@@ -418,6 +449,7 @@ export default function DebtsPage() {
       {selectedHandLoan && showHandPaymentForm && (
         <HandLoanPaymentForm
           loan={selectedHandLoan}
+          accountOptions={accountOptions} onAddAccount={handleAddAccount}
           onSave={handleRecordHandPayment}
           onClose={() => setShowHandPaymentForm(false)}
         />
@@ -436,7 +468,8 @@ export default function DebtsPage() {
 
       {/* ===== Credit Card Modals ===== */}
       {showCardForm && !editingCard && (
-        <CreditCardForm onSave={handleSaveCard} onClose={() => setShowCardForm(false)} />
+        <CreditCardForm onSave={handleSaveCard} onClose={() => setShowCardForm(false)}
+          accountOptions={accountOptions} onAddAccount={handleAddAccount} />
       )}
 
       {selectedCard && !editingCard && !showBillForm && (
@@ -465,6 +498,7 @@ export default function DebtsPage() {
           }}
           onSave={handleSaveCard}
           onDelete={handleDeleteCard}
+          accountOptions={accountOptions} onAddAccount={handleAddAccount}
           onClose={() => { setEditingCard(false); setSelectedCard(null); }}
         />
       )}
@@ -472,6 +506,8 @@ export default function DebtsPage() {
       {selectedCard && showBillForm && (
         <CreditCardBillForm
           cardName={selectedCard.name}
+          defaultAccount={selectedCard.debitsFrom}
+          accountOptions={accountOptions} onAddAccount={handleAddAccount}
           initial={editingBill}
           isEditing={!!editingBill}
           prefillTotalAmountDue={!editingBill ? billPrefillAmount : null}

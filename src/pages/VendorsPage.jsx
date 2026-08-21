@@ -9,7 +9,7 @@ import EntryForm from '../components/EntryForm';
 import { formatCurrency } from '../utils/formatters';
 
 export default function VendorsPage() {
-  const { vendors, lists: listsData } = useAppData();
+  const { vendors, lists: listsData, cashBook } = useAppData();
   const { rows, isLoading, addEntry, editEntry, deleteEntry, totalOwed, vendorBalances, projectBills } = vendors;
   const { lists, addListItem } = listsData;
   const [showForm, setShowForm] = useState(false);
@@ -20,6 +20,12 @@ export default function VendorsPage() {
   const handleSave = async (entry) => {
     try {
       await addEntry(entry);
+      if (entry.logToCashBook && entry.cashBookAccount) {
+        await cashBook.addEntry({
+          date: entry.date, description: `${entry.vendor} - ${entry.description}`,
+          account: entry.cashBookAccount, type: 'VENDOR', moneyOut: entry.paid,
+        });
+      }
       setShowForm(false);
       setToast({ message: 'Entry saved!', type: 'success' });
     } catch {

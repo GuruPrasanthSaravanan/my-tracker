@@ -2,10 +2,13 @@ import { useState } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { formatCurrency, getTodayISO } from '../utils/formatters';
 import { splitPayment, computeSimpleInterestAccrued } from '../utils/loanCalculations';
+import CashBookLinkToggle from './CashBookLinkToggle';
 
-export default function HandLoanPaymentForm({ loan, initial, isEditing, onSave, onDelete, onClose }) {
+export default function HandLoanPaymentForm({ loan, accountOptions = [], onAddAccount, initial, isEditing, onSave, onDelete, onClose }) {
   const [amount, setAmount] = useState(initial ? String(initial.amount) : '');
   const [date, setDate] = useState(initial?.date || getTodayISO());
+  const [logToCashBook, setLogToCashBook] = useState(!isEditing);
+  const [cashBookAccount, setCashBookAccount] = useState(loan.debitsFrom || '');
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -23,10 +26,11 @@ export default function HandLoanPaymentForm({ loan, initial, isEditing, onSave, 
   const handleSubmit = async () => {
     if (busy) return;
     if (!amount) return setError('Please enter a payment amount.');
+    if (logToCashBook && !cashBookAccount) return setError('Please choose an account to log this in CashBook, or uncheck the option.');
     setError('');
     setIsSaving(true);
     try {
-      await onSave(parseFloat(amount), date);
+      await onSave(parseFloat(amount), date, logToCashBook, cashBookAccount);
     } finally {
       setIsSaving(false);
     }
@@ -110,6 +114,18 @@ export default function HandLoanPaymentForm({ loan, initial, isEditing, onSave, 
                 </div>
               )}
             </div>
+          )}
+
+          {!isEditing && (
+            <CashBookLinkToggle
+              checked={logToCashBook}
+              onCheckedChange={setLogToCashBook}
+              account={cashBookAccount}
+              onAccountChange={setCashBookAccount}
+              accountOptions={accountOptions}
+              onAddAccount={onAddAccount}
+              disabled={busy}
+            />
           )}
 
           <button onClick={handleSubmit} disabled={busy}

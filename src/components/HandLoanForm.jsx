@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { getTodayISO } from '../utils/formatters';
+import Dropdown from './Dropdown';
 
-export default function HandLoanForm({ initial, direction, onSave, onDelete, onClose }) {
+export default function HandLoanForm({ initial, direction, onSave, onDelete, onClose, accountOptions = [], onAddAccount }) {
   const [form, setForm] = useState(initial || {
     name: '', principal: '', annualRate: '0', startDate: getTodayISO(),
     direction: direction || 'Owe', debitsFrom: '', status: 'Active', notes: '',
@@ -85,12 +86,13 @@ export default function HandLoanForm({ initial, direction, onSave, onDelete, onC
               </select>
             </div>
           </div>
-          <div>
-            <label className="text-xs text-gray-500">{form.direction === 'Lent' ? 'Given From' : 'Debits From'}</label>
-            <input type="text" value={form.debitsFrom} onChange={(e) => set('debitsFrom', e.target.value)}
-              placeholder="e.g., HDFC, CASH" disabled={busy}
-              className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
-          </div>
+          <Dropdown
+            label={form.direction === 'Lent' ? 'Given From' : 'Debits From'}
+            options={accountOptions}
+            value={form.debitsFrom}
+            onChange={(v) => set('debitsFrom', v)}
+            onAddNew={onAddAccount}
+          />
           <div>
             <label className="text-xs text-gray-500">Notes</label>
             <input type="text" value={form.notes} onChange={(e) => set('notes', e.target.value)} disabled={busy}

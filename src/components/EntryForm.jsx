@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import Dropdown from './Dropdown';
+import CashBookLinkToggle from './CashBookLinkToggle';
 import { getTodayISO } from '../utils/formatters';
 
 const titles = {
@@ -50,8 +51,16 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState('');
+  const [logToCashBook, setLogToCashBook] = useState(!isEditing);
+  const [cashBookAccount, setCashBookAccount] = useState('');
 
   const set = (field, value) => setForm((prev) => ({ ...prev, [field]: value }));
+
+  // Paying a vendor only updates the Vendors tab's own balance - it doesn't
+  // touch CashBook, so without this a CashBook account balance can drift
+  // from reality. Only offered for a brand-new "Paid" entry, not on edits
+  // (to avoid re-logging the same payment every time it's corrected).
+  const showCashBookLink = type === 'vendors' && form.direction === 'out' && !isEditing;
 
   const validate = () => {
     if (showAmount[type] && !form.amount) return 'Please enter an amount.';
@@ -59,6 +68,9 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
     if (type === 'cashbook' && !form.account) return 'Please select an Account.';
     if (type === 'cashbook' && !form.type) return 'Please select a Type.';
     if (type === 'vendors' && !form.vendor) return 'Please select a Vendor.';
+    if (showCashBookLink && logToCashBook && !cashBookAccount) {
+      return 'Please choose an account to log this payment in CashBook, or uncheck the option.';
+    }
     if (type === 'project' && !form.description) return 'Please enter a project name.';
     return '';
   };
@@ -90,6 +102,8 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
         project: form.project,
         bill: form.direction === 'in' ? form.amount : '',
         paid: form.direction === 'out' ? form.amount : '',
+        logToCashBook: showCashBookLink && logToCashBook,
+        cashBookAccount: showCashBookLink && logToCashBook ? cashBookAccount : null,
       };
     } else if (type === 'project') {
       payload = {
@@ -228,6 +242,18 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
                 disabled={busy}
                 className="w-full border rounded-lg px-3 py-3 mt-1 text-xl font-bold text-center disabled:opacity-50" />
             </div>
+          )}
+
+          {showCashBookLink && (
+            <CashBookLinkToggle
+              checked={logToCashBook}
+              onCheckedChange={setLogToCashBook}
+              account={cashBookAccount}
+              onAccountChange={setCashBookAccount}
+              accountOptions={lists.accounts}
+              onAddAccount={onAddListItem ? (v) => onAddListItem('accounts', v) : undefined}
+              disabled={busy}
+            />
           )}
 
           <button onClick={handleSubmit} disabled={busy}

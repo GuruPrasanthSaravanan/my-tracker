@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { X, Trash2 } from 'lucide-react';
+import Dropdown from './Dropdown';
 
-export default function CreditCardForm({ initial, onSave, onDelete, onClose }) {
+export default function CreditCardForm({ initial, onSave, onDelete, onClose, accountOptions = [], onAddAccount }) {
   const [form, setForm] = useState(initial || {
     name: '', creditLimit: '', interestRateMonthly: '3.5', debitsFrom: '', status: 'Active', notes: '',
   });
@@ -64,12 +65,13 @@ export default function CreditCardForm({ initial, onSave, onDelete, onClose }) {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-gray-500">Debits From</label>
-              <input type="text" value={form.debitsFrom} onChange={(e) => set('debitsFrom', e.target.value)}
-                placeholder="e.g., Axis" disabled={busy}
-                className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
-            </div>
+            <Dropdown
+              label="Debits From"
+              options={accountOptions}
+              value={form.debitsFrom}
+              onChange={(v) => set('debitsFrom', v)}
+              onAddNew={onAddAccount}
+            />
             <div>
               <label className="text-xs text-gray-500">Status</label>
               <select value={form.status} onChange={(e) => set('status', e.target.value)} disabled={busy}

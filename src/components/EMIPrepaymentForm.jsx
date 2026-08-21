@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { formatCurrency, getTodayISO } from '../utils/formatters';
+import CashBookLinkToggle from './CashBookLinkToggle';
 
-export default function EMIPrepaymentForm({ loanName, outstandingBalance, initial, isEditing, onSave, onDelete, onClose }) {
+export default function EMIPrepaymentForm({ loanName, outstandingBalance, defaultAccount, accountOptions = [], onAddAccount, initial, isEditing, onSave, onDelete, onClose }) {
   const [date, setDate] = useState(initial?.date || getTodayISO());
   const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : '');
   const [notes, setNotes] = useState(initial?.notes || '');
+  const [logToCashBook, setLogToCashBook] = useState(!isEditing);
+  const [cashBookAccount, setCashBookAccount] = useState(defaultAccount || '');
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -16,10 +19,14 @@ export default function EMIPrepaymentForm({ loanName, outstandingBalance, initia
     if (busy) return;
     if (!date) return setError('Please enter a date.');
     if (!amount) return setError('Please enter the part-payment amount.');
+    if (logToCashBook && !cashBookAccount) return setError('Please choose an account to log this in CashBook, or uncheck the option.');
     setError('');
     setIsSaving(true);
     try {
-      await onSave({ date, amount: parseFloat(amount), notes });
+      await onSave({
+        date, amount: parseFloat(amount), notes,
+        logToCashBook, cashBookAccount: logToCashBook ? cashBookAccount : null,
+      });
     } finally {
       setIsSaving(false);
     }
@@ -71,6 +78,18 @@ export default function EMIPrepaymentForm({ loanName, outstandingBalance, initia
           <p className="text-xs text-gray-400">
             This is on top of your regular EMI, and reduces the loan tenure automatically.
           </p>
+
+          {!isEditing && (
+            <CashBookLinkToggle
+              checked={logToCashBook}
+              onCheckedChange={setLogToCashBook}
+              account={cashBookAccount}
+              onAccountChange={setCashBookAccount}
+              accountOptions={accountOptions}
+              onAddAccount={onAddAccount}
+              disabled={busy}
+            />
+          )}
 
           <button onClick={handleSubmit} disabled={busy}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-lg mt-2 disabled:opacity-60">
