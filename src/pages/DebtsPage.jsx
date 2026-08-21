@@ -15,6 +15,7 @@ import CreditCardBillForm from '../components/CreditCardBillForm';
 import Toast from '../components/Toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import { formatCurrency } from '../utils/formatters';
+import { computeCashBookSpendForAccount } from '../utils/aggregations';
 import { Plus } from 'lucide-react';
 
 const SECTIONS = [
@@ -24,7 +25,7 @@ const SECTIONS = [
 ];
 
 export default function DebtsPage() {
-  const { emiLoans, handLoans, creditCards } = useAppData();
+  const { emiLoans, handLoans, creditCards, cashBook } = useAppData();
   const [section, setSection] = useState('emi');
   const [toast, setToast] = useState(null);
   const notify = (message, type = 'success') => setToast({ message, type });
@@ -50,6 +51,7 @@ export default function DebtsPage() {
   const [editingCard, setEditingCard] = useState(false);
   const [showBillForm, setShowBillForm] = useState(false);
   const [editingBill, setEditingBill] = useState(null);
+  const [billPrefillAmount, setBillPrefillAmount] = useState(null);
 
   // ===== EMI handlers =====
   const handleSaveEMI = async (entry) => {
@@ -194,6 +196,12 @@ export default function DebtsPage() {
       setEditingBill(null);
       notify('Bill deleted.');
     } catch { onErr(); }
+  };
+
+  const openAddBillWithPrefill = (amount) => {
+    setEditingBill(null);
+    setBillPrefillAmount(amount);
+    setShowBillForm(true);
   };
 
   return (
@@ -434,8 +442,12 @@ export default function DebtsPage() {
       {selectedCard && !editingCard && !showBillForm && (
         <CreditCardDetail
           card={selectedCard}
+          projectedSpend={computeCashBookSpendForAccount(
+            cashBook.rows, selectedCard.name, selectedCard.latestBill?.statementDate || null
+          )}
           onEdit={() => setEditingCard(true)}
-          onAddBill={() => { setEditingBill(null); setShowBillForm(true); }}
+          onAddBill={() => { setEditingBill(null); setBillPrefillAmount(null); setShowBillForm(true); }}
+          onAddBillWithPrefill={openAddBillWithPrefill}
           onEditBill={(b) => { setEditingBill(b); setShowBillForm(true); }}
           onClose={() => setSelectedCard(null)}
         />
@@ -462,9 +474,10 @@ export default function DebtsPage() {
           cardName={selectedCard.name}
           initial={editingBill}
           isEditing={!!editingBill}
+          prefillTotalAmountDue={!editingBill ? billPrefillAmount : null}
           onSave={handleSaveBill}
           onDelete={editingBill ? handleDeleteBill : undefined}
-          onClose={() => { setShowBillForm(false); setEditingBill(null); }}
+          onClose={() => { setShowBillForm(false); setEditingBill(null); setBillPrefillAmount(null); }}
         />
       )}
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sumByField, computeVendorBalances, computeAccountBalances, computeProjectSpent } from '../../src/utils/aggregations';
+import { sumByField, computeVendorBalances, computeAccountBalances, computeProjectSpent, computeCashBookSpendForAccount } from '../../src/utils/aggregations';
 
 describe('sumByField', () => {
   it('sums values grouped by a field', () => {
@@ -51,6 +51,61 @@ describe('computeProjectSpent', () => {
     expect(computeProjectSpent(vendorRows, 'Constr')).toBe(73000);
     expect(computeProjectSpent(vendorRows, 'Reno')).toBe(12000);
     expect(computeProjectSpent(vendorRows, 'Land')).toBe(0);
+  });
+});
+
+describe('computeCashBookSpendForAccount', () => {
+  const rows = [
+    ['2026-08-01', 'Groceries', 'ICICI Amazon Pay', 'Shopping', '', '2000'],
+    ['2026-08-05', 'Electronics', 'ICICI Amazon Pay', 'Shopping', '', '15000'],
+    ['2026-08-10', 'Refund', 'ICICI Amazon Pay', 'Shopping', '3000', ''],
+    ['2026-08-10', 'Fuel', 'HDFC', 'Fuel', '', '2500'], // different account - ignored
+    ['2026-09-01', 'Next cycle purchase', 'ICICI Amazon Pay', 'Shopping', '', '5000'],
+  ];
+
+  it('sums money-out minus money-in for the matching account within the date window', () => {
+    const result = computeCashBookSpendForAccount(rows, 'ICICI Amazon Pay', null, '2026-08-31');
+    // 2000 + 15000 - 3000 = 14000, across 3 matching transactions
+    expect(result.spend).toBe(14000);
+    expect(result.transactionCount).toBe(3);
+  });
+
+  it('excludes entries on or before fromDate (last statement date) and includes only the new cycle', () => {
+    const result = computeCashBookSpendForAccount(rows, 'ICICI Amazon Pay', '2026-08-31', '2026-09-30');
+    expect(result.spend).toBe(5000);
+    expect(result.transactionCount).toBe(1);
+  });
+
+  it('ignores entries for a different account', () => {
+    const result = computeCashBookSpendForAccount(rows, 'HDFC', null, '2026-08-31');
+    expect(result.spend).toBe(2500);
+    expect(result.transactionCount).toBe(1);
+  });
+
+  it('returns zero spend for an account with no matching transactions', () => {
+    const result = computeCashBookSpendForAccount(rows, 'Nonexistent Card', null, '2026-12-31');
+    expect(result.spend).toBe(0);
+    expect(result.transactionCount).toBe(0);
+  });
+
+  it('never returns negative spend even if refunds exceed purchases in the window', () => {
+    const refundHeavyRows = [
+      ['2026-08-01', 'Purchase', 'Card', 'Shopping', '', '1000'],
+      ['2026-08-02', 'Big Refund', 'Card', 'Shopping', '5000', ''],
+    ];
+    const result = computeCashBookSpendForAccount(refundHeavyRows, 'Card', null, '2026-08-31');
+    expect(result.spend).toBe(0);
+  });
+
+  it('skips rows with missing or unparseable dates instead of throwing', () => {
+    const messyRows = [
+      ['', 'No date', 'Card', 'Shopping', '', '1000'],
+      ['not-a-date', 'Bad date', 'Card', 'Shopping', '', '2000'],
+      ['2026-08-15', 'Valid', 'Card', 'Shopping', '', '3000'],
+    ];
+    const result = computeCashBookSpendForAccount(messyRows, 'Card', null, '2026-08-31');
+    expect(result.spend).toBe(3000);
+    expect(result.transactionCount).toBe(1);
   });
 });
 

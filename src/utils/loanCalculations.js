@@ -243,7 +243,9 @@ export function computeMinimumDue(bill, minDuePercent = 5, floorAmount = 200) {
   const revolvingBalance = Math.max(bill.totalAmountDue - emiComponent - overlimitAmount, 0);
 
   const mad = Math.max((revolvingBalance * minDuePercent) / 100, floorAmount) + emiComponent + overlimitAmount;
-  return Math.min(Math.round(mad), bill.totalAmountDue);
+  // Clamp to [0, totalAmountDue] - a negative totalAmountDue (credit balance from an
+  // overpayment/refund) should never produce a negative minimum due.
+  return Math.max(Math.min(Math.round(mad), bill.totalAmountDue), 0);
 }
 
 /**

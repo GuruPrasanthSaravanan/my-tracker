@@ -237,6 +237,25 @@ describe('computeMinimumDue', () => {
     const mad = computeMinimumDue({ totalAmountDue: 100 });
     expect(mad).toBe(100);
   });
+
+  it('returns 0 when the total amount due is 0 (fully paid, no new spend)', () => {
+    expect(computeMinimumDue({ totalAmountDue: 0 })).toBe(0);
+  });
+
+  it('never goes negative for a credit balance (overpayment/refund resulted in a negative total due)', () => {
+    expect(computeMinimumDue({ totalAmountDue: -500 })).toBe(0);
+  });
+
+  it('handles EMI/overlimit components exceeding the total amount due without going negative', () => {
+    // Malformed/edge input: components larger than the total - revolving balance clamps to 0.
+    const mad = computeMinimumDue({ totalAmountDue: 1000, emiComponent: 2000 });
+    expect(mad).toBeGreaterThanOrEqual(0);
+  });
+
+  it('respects a custom minDuePercent and floorAmount', () => {
+    const mad = computeMinimumDue({ totalAmountDue: 100000 }, 10, 500);
+    expect(mad).toBe(10000); // 10% of 100000
+  });
 });
 
 describe('projectCreditCardPayoff', () => {
@@ -252,6 +271,38 @@ describe('projectCreditCardPayoff', () => {
 
   it('flags when the minimum-due percentage cannot outpace the interest rate', () => {
     const result = projectCreditCardPayoff(50000, 6, 5); // 6%/mo interest > 5% min-due rate
+    expect(result.neverPaysOff).toBe(true);
+    expect(result.monthsToPayoff).toBeNull();
+  });
+
+  it('treats an exactly-equal min-due rate and interest rate as never paying off (conservative)', () => {
+    const result = projectCreditCardPayoff(50000, 5, 5);
+    expect(result.neverPaysOff).toBe(true);
+  });
+
+  it('returns immediately (0 months) for a zero outstanding balance', () => {
+    const result = projectCreditCardPayoff(0, 3.5);
+    expect(result.monthsToPayoff).toBe(0);
+    expect(result.totalInterestPaid).toBe(0);
+  });
+
+  it('does not overpay when the balance is smaller than the payment floor', () => {
+    // 50 outstanding, floor of 200 - the payment should be capped to the balance, not 200.
+    const result = projectCreditCardPayoff(50, 3.5);
+    expect(result.schedule[0].payment).toBeCloseTo(50 + result.schedule[0].interest, 2);
+    expect(result.monthsToPayoff).toBe(1);
+  });
+
+  it('works for a 0% interest card (e.g. promotional financing)', () => {
+    const result = projectCreditCardPayoff(10000, 0);
+    expect(result.neverPaysOff).toBe(false);
+    expect(result.totalInterestPaid).toBe(0);
+    expect(result.monthsToPayoff).toBeGreaterThan(0);
+  });
+
+  it('caps at maxMonths and flags neverPaysOff if payoff would take unreasonably long', () => {
+    // minDuePercent only marginally above the monthly rate - takes a very long time.
+    const result = projectCreditCardPayoff(1000000, 3.5, 3.51, 200, 24);
     expect(result.neverPaysOff).toBe(true);
     expect(result.monthsToPayoff).toBeNull();
   });

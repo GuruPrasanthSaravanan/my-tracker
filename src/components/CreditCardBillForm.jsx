@@ -10,15 +10,15 @@ function addDays(dateStr, days) {
   return d.toISOString().split('T')[0];
 }
 
-export default function CreditCardBillForm({ cardName, initial, isEditing, onSave, onDelete, onClose }) {
+export default function CreditCardBillForm({ cardName, initial, isEditing, prefillTotalAmountDue, onSave, onDelete, onClose }) {
   const [form, setForm] = useState(initial || {
     statementDate: today(),
     dueDate: addDays(today(), 20), // Indian banks: ~20 days after statement date
-    totalAmountDue: '',
+    totalAmountDue: prefillTotalAmountDue != null ? String(Math.round(prefillTotalAmountDue)) : '',
     minimumAmountDue: '',
     paymentMade: '',
     paymentDate: '',
-    notes: '',
+    notes: prefillTotalAmountDue != null ? 'Amount estimated from CashBook spend - verify against your actual statement.' : '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);

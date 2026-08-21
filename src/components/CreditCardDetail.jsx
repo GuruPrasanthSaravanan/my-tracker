@@ -1,9 +1,11 @@
 import { Pencil, Plus, X } from 'lucide-react';
 import { formatCurrency, formatDate } from '../utils/formatters';
 
-export default function CreditCardDetail({ card, onEdit, onAddBill, onEditBill, onClose }) {
+export default function CreditCardDetail({ card, projectedSpend, onEdit, onAddBill, onAddBillWithPrefill, onEditBill, onClose }) {
   const bill = card.latestBill;
   const projection = card.projection;
+  const priorUnpaid = card.outstanding || 0;
+  const projectedNextBill = priorUnpaid + (projectedSpend?.spend || 0);
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end">
@@ -75,6 +77,36 @@ export default function CreditCardDetail({ card, onEdit, onAddBill, onEditBill, 
           </div>
         ) : (
           <p className="text-sm text-gray-400 mb-4">No bills recorded yet.</p>
+        )}
+
+        {projectedSpend && (
+          <div className="bg-blue-50 rounded-lg p-3 mb-4">
+            <p className="text-xs text-blue-700 font-semibold mb-1">
+              Projected from CashBook (since {bill ? 'last statement' : 'first tracked spend'})
+            </p>
+            <p className="text-sm text-gray-700">
+              New spend this cycle: <span className="font-bold text-gray-900">{formatCurrency(projectedSpend.spend)}</span>
+              {' '}({projectedSpend.transactionCount} {projectedSpend.transactionCount === 1 ? 'entry' : 'entries'})
+            </p>
+            {priorUnpaid > 0 && (
+              <p className="text-sm text-gray-700">
+                Plus unpaid balance: <span className="font-bold text-gray-900">{formatCurrency(priorUnpaid)}</span>
+              </p>
+            )}
+            <p className="text-sm text-gray-700 mt-1">
+              Estimated next bill: <span className="font-bold text-primary">{formatCurrency(projectedNextBill)}</span>
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              This is an estimate from CashBook entries tagged Account = "{card.name}". Your actual statement
+              may differ due to fees, interest, or transactions not logged in CashBook.
+            </p>
+            {projectedNextBill > 0 && (
+              <button onClick={() => onAddBillWithPrefill(projectedNextBill)}
+                className="text-xs text-primary font-medium mt-2">
+                Use this estimate to add a new bill →
+              </button>
+            )}
+          </div>
         )}
 
         <button onClick={onAddBill}

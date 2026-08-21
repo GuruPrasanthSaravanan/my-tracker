@@ -64,3 +64,41 @@ export function computeProjectSpent(rows, projectCode) {
   return total;
 }
 
+/**
+ * Projects a credit card's upcoming bill from CashBook activity, by treating
+ * the card as a "virtual account" - every purchase on the card is logged as
+ * a normal CashBook entry with Account = the card's exact name (Money Out for
+ * a purchase, Money In for a refund/credit). This sums that account's net
+ * spend within a date window (exclusive of `fromDate` itself, inclusive of
+ * `toDate`), giving an estimate of "what this cycle's bill will show" before
+ * the actual bank statement is generated.
+ * @param {string[][]} rows - CashBook rows [Date, Desc, Account, Type, IN, OUT]
+ * @param {string} accountName - must exactly match the Credit Card's Name
+ * @param {string|Date|null} fromDate - typically the last bill's statement date (exclusive);
+ *   null means "from the beginning" (used when no bill has ever been recorded for this card)
+ * @param {string|Date} toDate - defaults to now
+ * @returns {{ spend: number, transactionCount: number }}
+ */
+export function computeCashBookSpendForAccount(rows, accountName, fromDate = null, toDate = new Date()) {
+  const from = fromDate ? new Date(fromDate) : null;
+  const to = new Date(toDate);
+  let spend = 0;
+  let transactionCount = 0;
+
+  for (const row of rows) {
+    if ((row[2] || '') !== accountName) continue;
+    if (!row[0]) continue;
+    const date = new Date(row[0]);
+    if (Number.isNaN(date.getTime())) continue;
+    if (from && date <= from) continue;
+    if (date > to) continue;
+
+    const moneyIn = parseFloat(row[4]) || 0;
+    const moneyOut = parseFloat(row[5]) || 0;
+    spend += moneyOut - moneyIn;
+    transactionCount++;
+  }
+
+  return { spend: Math.max(spend, 0), transactionCount };
+}
+
