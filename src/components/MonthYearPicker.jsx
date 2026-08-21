@@ -2,12 +2,18 @@ import { useRef } from 'react';
 import { Calendar } from 'lucide-react';
 
 /**
- * Formats a native <input type="month"> value ("2028-08") into the
- * human-readable "MMM YYYY" format used throughout the Debts tab ("Aug 2028").
+ * Formats a native <input type="date"> value ("2028-08-15") into the
+ * human-readable "MMM YYYY" format used throughout the Debts tab ("Aug 2028"),
+ * discarding the day (we only care about month/year here).
+ *
+ * Note: we deliberately use type="date" instead of type="month" for the
+ * underlying picker - Safari (all versions, incl. iOS, our primary target)
+ * does not support <input type="month"> at all; it silently renders as a
+ * plain text box with no picker. type="date" is universally supported.
  */
-function formatMonthYear(isoMonth) {
-  if (!isoMonth) return '';
-  const [year, month] = isoMonth.split('-');
+function formatMonthYear(isoDate) {
+  if (!isoDate) return '';
+  const [year, month] = isoDate.split('-');
   const date = new Date(Number(year), Number(month) - 1, 1);
   return date.toLocaleString('en', { month: 'short', year: 'numeric' });
 }
@@ -15,15 +21,15 @@ function formatMonthYear(isoMonth) {
 /**
  * A free-text field (keeps existing "Aug 2028" / "2030" style values intact,
  * both for display and backward compatibility with historical sheet data)
- * paired with a calendar icon that opens a native month/year picker.
- * Picking a month formats it as "MMM YYYY" and fills the text field, so users
+ * paired with a calendar icon that opens a native date picker. Picking any
+ * day formats its month/year as "MMM YYYY" and fills the text field, so users
  * can either type freely or tap the calendar for a guided selection.
  */
 export default function MonthYearPicker({ label, value, onChange, placeholder, disabled }) {
   const hiddenInputRef = useRef(null);
 
   const handlePickerChange = (e) => {
-    const iso = e.target.value; // "yyyy-mm"
+    const iso = e.target.value; // "yyyy-mm-dd"
     if (iso) onChange(formatMonthYear(iso));
   };
 
@@ -65,7 +71,7 @@ export default function MonthYearPicker({ label, value, onChange, placeholder, d
         {/* Visually hidden but still interactive - triggered via showPicker()/focus() above */}
         <input
           ref={hiddenInputRef}
-          type="month"
+          type="date"
           onChange={handlePickerChange}
           disabled={disabled}
           tabIndex={-1}
