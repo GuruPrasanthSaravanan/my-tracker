@@ -4,6 +4,7 @@ import ProgressBar from '../components/ProgressBar';
 import DebtRow from '../components/DebtRow';
 import Toast from '../components/Toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
+import MonthYearPicker from '../components/MonthYearPicker';
 import { formatCurrency } from '../utils/formatters';
 import { X, Plus, Pencil, Trash2 } from 'lucide-react';
 
@@ -90,12 +91,13 @@ function DebtForm({ title, initial, onSave, onClose }) {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className="text-xs text-gray-500">Target Date</label>
-              <input type="text" value={form.targetDate} onChange={(e) => set('targetDate', e.target.value)}
-                disabled={isSaving}
-                placeholder="e.g., Sep 2027" className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
-            </div>
+            <MonthYearPicker
+              label="Target Date"
+              value={form.targetDate}
+              onChange={(v) => set('targetDate', v)}
+              placeholder="e.g., Sep 2027"
+              disabled={isSaving}
+            />
             <div>
               <label className="text-xs text-gray-500">Debits From</label>
               <input type="text" value={form.debitsFrom} onChange={(e) => set('debitsFrom', e.target.value)}
@@ -170,10 +172,10 @@ function PaymentForm({ debtName, outstanding = 0, initial, isEditing, onSave, on
             </div>
           )}
           <div>
-            <label className="text-xs text-gray-500">Month / Date</label>
-            <input type="text" value={form.month} onChange={(e) => setForm(f => ({ ...f, month: e.target.value }))}
+            <label className="text-xs text-gray-500">Payment Date</label>
+            <input type="date" value={form.month} onChange={(e) => setForm(f => ({ ...f, month: e.target.value }))}
               disabled={busy}
-              placeholder="e.g., Sep 2026" className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
+              className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
           </div>
           <div>
             <label className="text-xs text-gray-500">Payment Amount</label>
