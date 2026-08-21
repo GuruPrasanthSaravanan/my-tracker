@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { X, Trash2 } from 'lucide-react';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, getTodayISO } from '../utils/formatters';
 import { splitPayment, computeSimpleInterestAccrued } from '../utils/loanCalculations';
-
-const today = () => new Date().toISOString().split('T')[0];
 
 export default function HandLoanPaymentForm({ loan, initial, isEditing, onSave, onDelete, onClose }) {
   const [amount, setAmount] = useState(initial ? String(initial.amount) : '');
-  const [date, setDate] = useState(initial?.date || today());
+  const [date, setDate] = useState(initial?.date || getTodayISO());
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);

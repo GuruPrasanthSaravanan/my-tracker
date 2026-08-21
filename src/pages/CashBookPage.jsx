@@ -7,7 +7,7 @@ import Toast from '../components/Toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import EntryForm from '../components/EntryForm';
 import ReconcileModal from '../components/ReconcileModal';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, getTodayISO } from '../utils/formatters';
 
 export default function CashBookPage() {
   const { cashBook, lists: listsData, accountSettings } = useAppData();
@@ -66,9 +66,8 @@ export default function CashBookPage() {
 
   const handleSaveCorrection = async (diff) => {
     try {
-      const today = new Date().toISOString().split('T')[0];
       await addEntry({
-        date: today,
+        date: getTodayISO(),
         description: 'Balance correction',
         account: reconcileAccount,
         type: 'ADJUSTMENT',

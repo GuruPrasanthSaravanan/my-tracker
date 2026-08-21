@@ -15,6 +15,8 @@
  *    on, but do not retroactively change interest already accrued.
  */
 
+import { toLocalISODate } from './formatters';
+
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
@@ -173,7 +175,7 @@ export function computeEMIStatus(loan, asOfDate = new Date(), extraPayments = []
     outstandingBalance,
     totalInterestPayable,
     isComplete: outstandingBalance <= 0.01,
-    nextDueDate: outstandingBalance > 0.01 ? nextDueDate.toISOString().split('T')[0] : null,
+    nextDueDate: outstandingBalance > 0.01 ? toLocalISODate(nextDueDate) : null,
   };
 }
 

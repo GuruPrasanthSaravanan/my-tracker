@@ -1,12 +1,11 @@
 import { useState } from 'react';
 import { X, Trash2 } from 'lucide-react';
-
-const today = () => new Date().toISOString().split('T')[0];
+import { getTodayISO } from '../utils/formatters';
 
 export default function EMILoanForm({ initial, onSave, onDelete, onClose }) {
   const [form, setForm] = useState(initial || {
     name: '', principal: '', annualRate: '', tenureMonths: '',
-    startDate: today(), debitsFrom: '', status: 'Active', notes: '',
+    startDate: getTodayISO(), debitsFrom: '', status: 'Active', notes: '',
     emiDate: '', actualEMI: '',
   });
   const [isSaving, setIsSaving] = useState(false);

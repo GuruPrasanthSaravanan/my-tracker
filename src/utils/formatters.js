@@ -25,3 +25,39 @@ export function formatDate(dateStr) {
   const month = date.toLocaleString('en', { month: 'short' });
   return `${day} ${month}`;
 }
+
+/**
+ * Formats a Date object as a local "YYYY-MM-DD" string using local calendar
+ * getters (getFullYear/getMonth/getDate), NOT `toISOString()`.
+ *
+ * `toISOString()` always converts to UTC first - for a timezone ahead of UTC
+ * (e.g. IST, UTC+5:30), calling it on "local midnight" or any local time
+ * before the UTC offset has elapsed rolls back to the *previous* calendar day
+ * in UTC, so `new Date().toISOString().split('T')[0]` can silently return
+ * yesterday's date for a few hours after midnight local time. This helper
+ * reads the date in the browser's own local timezone instead, so "today" is
+ * always today, and is safe to use as the single source of truth for date
+ * arithmetic (e.g. addDaysISO) that should stay anchored to local calendar days.
+ */
+export function toLocalISODate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/** Today's date as a local "YYYY-MM-DD" string (see toLocalISODate). */
+export function getTodayISO() {
+  return toLocalISODate(new Date());
+}
+
+/**
+ * Adds `days` to an ISO date string, staying in local-calendar-day
+ * arithmetic throughout (parses as local midnight, not UTC).
+ */
+export function addDaysISO(dateStr, days) {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const d = new Date(year, month - 1, day);
+  d.setDate(d.getDate() + days);
+  return toLocalISODate(d);
+}

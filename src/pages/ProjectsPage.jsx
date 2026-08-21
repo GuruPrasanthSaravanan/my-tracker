@@ -7,7 +7,7 @@ import FAB from '../components/FAB';
 import Toast from '../components/Toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import EntryForm from '../components/EntryForm';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, getTodayISO } from '../utils/formatters';
 
 export default function ProjectsPage() {
   const { projects: projectsData, vendors, lists: listsData } = useAppData();
@@ -139,7 +139,7 @@ export default function ProjectsPage() {
           lists={lists}
           onAddListItem={addListItem}
           initialData={{
-            date: new Date().toISOString().split('T')[0],
+            date: getTodayISO(),
             vendor: '',
             description: '',
             project: selectedProject?.code || '',

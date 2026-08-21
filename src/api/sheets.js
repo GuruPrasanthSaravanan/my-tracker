@@ -25,6 +25,35 @@ async function handleResponse(res) {
   throw new Error(error.error?.message || `Sheets API error: ${res.status}`);
 }
 
+// Matches the exact "YYYY-MM-DD" strings produced by every <input type="date">
+// and date-helper function in this app.
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Protects plain ISO date strings ("2026-08-21") from Google Sheets' automatic
+ * type detection when writing with valueInputOption=USER_ENTERED.
+ *
+ * Without this, Sheets auto-detects a string that looks like a date and
+ * converts the cell to its internal Date type, then re-formats it for display
+ * (and for later FORMATTED_VALUE reads) according to the *spreadsheet's own
+ * locale* setting - which may not be "YYYY-MM-DD" (e.g. a US-locale sheet
+ * reformats it to "8/21/2026"). If that reformatted string is later re-parsed
+ * anywhere with `new Date(...)`, non-ISO formats are parsed as *local* time
+ * rather than UTC, and converting back to a date-only string via
+ * `toISOString().split('T')[0]` (UTC-based) can then shift the date backward
+ * by one day for any timezone ahead of UTC (e.g. IST) - this is exactly the
+ * "statement date changes when edited" bug this fixes.
+ *
+ * Prefixing with a leading apostrophe is the standard Sheets convention for
+ * "store this literal text, don't auto-detect a type" - the apostrophe itself
+ * is never stored or returned, so reads always get back the exact same
+ * "YYYY-MM-DD" string that was written, regardless of spreadsheet locale.
+ * @param {any[]} values - a single row of values about to be written
+ */
+function protectIsoDates(values) {
+  return values.map((v) => (typeof v === 'string' && ISO_DATE_PATTERN.test(v) ? `'${v}` : v));
+}
+
 /**
  * Read a range from the spreadsheet.
  * @param {string} token - OAuth access token
@@ -66,7 +95,7 @@ export async function appendRow(token, range, values) {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ values: [values] }),
+    body: JSON.stringify({ values: [protectIsoDates(values)] }),
   });
   await handleResponse(res);
 }
@@ -102,7 +131,7 @@ export async function updateRow(token, range, values) {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ values: [values] }),
+    body: JSON.stringify({ values: [protectIsoDates(values)] }),
   });
   await handleResponse(res);
 }

@@ -1,19 +1,12 @@
 import { useState } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { computeMinimumDue } from '../utils/loanCalculations';
-
-const today = () => new Date().toISOString().split('T')[0];
-
-function addDays(dateStr, days) {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
-}
+import { getTodayISO, addDaysISO } from '../utils/formatters';
 
 export default function CreditCardBillForm({ cardName, initial, isEditing, prefillTotalAmountDue, onSave, onDelete, onClose }) {
   const [form, setForm] = useState(initial || {
-    statementDate: today(),
-    dueDate: addDays(today(), 20), // Indian banks: ~20 days after statement date
+    statementDate: getTodayISO(),
+    dueDate: addDaysISO(getTodayISO(), 20), // Indian banks: ~20 days after statement date
     totalAmountDue: prefillTotalAmountDue != null ? String(Math.round(prefillTotalAmountDue)) : '',
     minimumAmountDue: '',
     paymentMade: '',

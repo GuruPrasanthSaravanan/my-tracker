@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { X, Trash2 } from 'lucide-react';
-
-const today = () => new Date().toISOString().split('T')[0];
+import { getTodayISO } from '../utils/formatters';
 
 export default function HandLoanForm({ initial, direction, onSave, onDelete, onClose }) {
   const [form, setForm] = useState(initial || {
-    name: '', principal: '', annualRate: '0', startDate: today(),
+    name: '', principal: '', annualRate: '0', startDate: getTodayISO(),
     direction: direction || 'Owe', debitsFrom: '', status: 'Active', notes: '',
   });
   const [isSaving, setIsSaving] = useState(false);

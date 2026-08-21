@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { X, Trash2 } from 'lucide-react';
-import { formatCurrency } from '../utils/formatters';
-
-const today = () => new Date().toISOString().split('T')[0];
+import { formatCurrency, getTodayISO } from '../utils/formatters';
 
 export default function EMIPrepaymentForm({ loanName, outstandingBalance, initial, isEditing, onSave, onDelete, onClose }) {
-  const [date, setDate] = useState(initial?.date || today());
+  const [date, setDate] = useState(initial?.date || getTodayISO());
   const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : '');
   const [notes, setNotes] = useState(initial?.notes || '');
   const [isSaving, setIsSaving] = useState(false);

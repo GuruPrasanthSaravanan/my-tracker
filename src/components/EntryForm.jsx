@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import Dropdown from './Dropdown';
+import { getTodayISO } from '../utils/formatters';
 
 const titles = {
   cashbook: 'CashBook Entry',
@@ -35,9 +36,8 @@ function makeUniqueProjectCode(name, existingCodes = []) {
 }
 
 export default function EntryForm({ type, lists, onSave, onClose, initialData, onDelete, isEditing, onAddListItem, existingProjectCodes }) {
-  const today = new Date().toISOString().split('T')[0];
   const [form, setForm] = useState(initialData || {
-    date: today,
+    date: getTodayISO(),
     description: '',
     account: '',
     type: '',
