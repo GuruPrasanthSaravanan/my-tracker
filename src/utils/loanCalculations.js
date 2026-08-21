@@ -41,17 +41,24 @@ export function calculateEMI(principal, annualRate, tenureMonths) {
  * @param {Object<number, number>} extraPaymentsByMonth - optional map of
  *   1-based month number -> extra amount paid toward principal that month
  *   (on top of the regular EMI), e.g. a part-payment/prepayment.
+ * @param {number} [emiOverride] - use this exact EMI amount instead of the
+ *   theoretically calculated one. Banks often round the EMI to a clean
+ *   number, so the amount actually billed can differ slightly from the pure
+ *   formula result - pass the real EMI here to match your statements exactly.
  * @returns {{ month: number, emi: number, interest: number, principal: number, extraPayment: number, balance: number }[]}
  */
-export function buildAmortizationSchedule(principal, annualRate, tenureMonths, extraPaymentsByMonth = {}) {
+export function buildAmortizationSchedule(principal, annualRate, tenureMonths, extraPaymentsByMonth = {}, emiOverride = null) {
   const r = annualRate / 12 / 100;
-  const emi = calculateEMI(principal, annualRate, tenureMonths);
+  const emi = emiOverride || calculateEMI(principal, annualRate, tenureMonths);
   const schedule = [];
   let balance = principal;
 
   for (let month = 1; month <= tenureMonths && balance > 0.01; month++) {
     const interest = balance * r;
-    let principalComponent = emi - interest;
+    // Guard against a manually-entered actual EMI that's lower than the
+    // month's interest (would otherwise grow the balance, which this
+    // reducing-balance model doesn't support) - treat it as interest-only.
+    let principalComponent = Math.max(emi - interest, 0);
     // Zero out rounding residue on the final installment.
     if (month === tenureMonths || principalComponent > balance) {
       principalComponent = balance;
@@ -79,24 +86,47 @@ export function buildAmortizationSchedule(principal, annualRate, tenureMonths, e
 }
 
 /**
+ * Number of EMI installments that have actually occurred between a loan's
+ * start date and a given date, given the fixed day-of-month the EMI is
+ * debited (`emiDate`). Counting by calendar month alone (ignoring the day)
+ * over- or under-counts near month boundaries - e.g. a loan taken on the
+ * 28th with an EMI date of the 5th shouldn't count that first month until
+ * the 5th has actually passed. Falls back to the start date's own
+ * day-of-month if no explicit `emiDate` is given.
+ * @param {string|Date} startDate
+ * @param {string|Date} asOfDate
+ * @param {number} [emiDate] - day of month (1-31) the EMI is debited
+ */
+export function countElapsedInstallments(startDate, asOfDate, emiDate) {
+  const start = new Date(startDate);
+  const now = new Date(asOfDate);
+  const day = emiDate || start.getDate();
+
+  let months = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+  if (now.getDate() < day) {
+    months -= 1;
+  }
+  return Math.max(0, months);
+}
+
+/**
  * Computes the current status of an EMI loan as of a given date, assuming
  * on-time monthly payments since startDate: how many installments have
  * elapsed, totals paid so far, and the outstanding balance. Optionally takes
  * a list of extra/part-payments which accelerate payoff (see
- * buildAmortizationSchedule).
- * @param {{ principal: number, annualRate: number, tenureMonths: number, startDate: string }} loan
+ * buildAmortizationSchedule), an `emiDate` (day of month the EMI is
+ * debited, for more precise installment counting), and an `actualEMI`
+ * override to match the exact amount your bank bills (which may be rounded
+ * slightly differently from the pure formula result).
+ * @param {{ principal: number, annualRate: number, tenureMonths: number, startDate: string, emiDate?: number, actualEMI?: number }} loan
  * @param {string|Date} asOfDate
  * @param {{ date: string, amount: number }[]} extraPayments
  */
 export function computeEMIStatus(loan, asOfDate = new Date(), extraPayments = []) {
   const { principal, annualRate, tenureMonths } = loan;
   const start = new Date(loan.startDate);
-  const now = new Date(asOfDate);
 
-  const monthsElapsed = Math.max(
-    0,
-    (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth())
-  );
+  const monthsElapsed = countElapsedInstallments(loan.startDate, asOfDate, loan.emiDate);
 
   // Convert each extra payment's date into a 1-based month offset from the
   // loan start date, so it lands in the correct row of the schedule.
@@ -110,7 +140,7 @@ export function computeEMIStatus(loan, asOfDate = new Date(), extraPayments = []
     extraPaymentsByMonth[monthOffset] = (extraPaymentsByMonth[monthOffset] || 0) + p.amount;
   }
 
-  const schedule = buildAmortizationSchedule(principal, annualRate, tenureMonths, extraPaymentsByMonth);
+  const schedule = buildAmortizationSchedule(principal, annualRate, tenureMonths, extraPaymentsByMonth, loan.actualEMI || null);
   // The schedule may be shorter than tenureMonths if prepayments closed it early.
   const installmentsPaid = Math.min(monthsElapsed, schedule.length);
 
@@ -121,12 +151,14 @@ export function computeEMIStatus(loan, asOfDate = new Date(), extraPayments = []
     ? schedule[installmentsPaid - 1].balance
     : principal;
 
-  const emi = calculateEMI(principal, annualRate, tenureMonths);
+  const emi = loan.actualEMI || calculateEMI(principal, annualRate, tenureMonths);
   const totalInterestPayable = schedule.reduce((sum, row) => sum + row.interest, 0);
   const totalExtraPaid = extraPayments.reduce((sum, p) => sum + p.amount, 0);
 
-  // Next EMI due date = start date + installmentsPaid months.
+  // Next EMI due date = start date + installmentsPaid months, pinned to the
+  // configured EMI day-of-month (or the start date's day if none was given).
   const nextDueDate = new Date(start);
+  if (loan.emiDate) nextDueDate.setDate(loan.emiDate);
   nextDueDate.setMonth(nextDueDate.getMonth() + installmentsPaid);
 
   return {

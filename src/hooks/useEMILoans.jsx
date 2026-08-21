@@ -3,7 +3,12 @@ import { useAuth } from '../auth/useAuth';
 import { readSheet, appendRow, updateRow, clearRow } from '../api/sheets';
 import { computeEMIStatus } from '../utils/loanCalculations';
 
-// EMILoans tab layout: [Name, Principal, AnnualRate, TenureMonths, StartDate, DebitsFrom, Status, Notes]
+// EMILoans tab layout: [Name, Principal, AnnualRate, TenureMonths, StartDate, DebitsFrom,
+//   Status, Notes, EMIDate, ActualEMI]
+//   EMIDate: day of month (1-31) the EMI is debited - used for more precise installment
+//     counting than assuming it matches the loan's start-date day.
+//   ActualEMI: optional override for the exact amount your bank bills (may differ slightly
+//     from the calculated theoretical EMI due to bank rounding).
 // EMIPrepayments tab layout: [LoanName, Date, Amount, Notes] - part-payments/prepayments
 // that accelerate payoff beyond the regular monthly EMI.
 export function useEMILoans() {
@@ -17,7 +22,7 @@ export function useEMILoans() {
     setIsLoading(true);
     try {
       const [loanData, prepayData] = await Promise.all([
-        readSheet(token, 'EMILoans!A2:H500'),
+        readSheet(token, 'EMILoans!A2:J500'),
         readSheet(token, 'EMIPrepayments!A2:D2000'),
       ]);
       setRows(loanData);
@@ -35,8 +40,9 @@ export function useEMILoans() {
     const values = [
       entry.name, entry.principal, entry.annualRate, entry.tenureMonths,
       entry.startDate, entry.debitsFrom || '', entry.status || 'Active', entry.notes || '',
+      entry.emiDate || '', entry.actualEMI || '',
     ];
-    await appendRow(token, 'EMILoans!A:H', values);
+    await appendRow(token, 'EMILoans!A:J', values);
     await fetchData();
   }, [token, fetchData]);
 
@@ -45,14 +51,15 @@ export function useEMILoans() {
     const values = [
       entry.name, entry.principal, entry.annualRate, entry.tenureMonths,
       entry.startDate, entry.debitsFrom || '', entry.status || 'Active', entry.notes || '',
+      entry.emiDate || '', entry.actualEMI || '',
     ];
-    await updateRow(token, `EMILoans!A${sheetRow}:H${sheetRow}`, values);
+    await updateRow(token, `EMILoans!A${sheetRow}:J${sheetRow}`, values);
     await fetchData();
   }, [token, fetchData]);
 
   const deleteLoan = useCallback(async (rowIndex) => {
     const sheetRow = rowIndex + 2;
-    await clearRow(token, `EMILoans!A${sheetRow}:H${sheetRow}`);
+    await clearRow(token, `EMILoans!A${sheetRow}:J${sheetRow}`);
     await fetchData();
   }, [token, fetchData]);
 
@@ -84,6 +91,8 @@ export function useEMILoans() {
       debitsFrom: row[5] || '',
       status: row[6] || 'Active',
       notes: row[7] || '',
+      emiDate: parseInt(row[8]) || null,
+      actualEMI: parseFloat(row[9]) || null,
     }))
     .filter((loan) => loan.name); // skip cleared/blank rows
 

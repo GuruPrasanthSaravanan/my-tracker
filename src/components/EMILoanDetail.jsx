@@ -19,6 +19,8 @@ export default function EMILoanDetail({ loan, onEdit, onAddPrepayment, onEditPre
         <div className="text-sm text-gray-500 space-y-1 mb-4">
           <p>Principal Taken: <span className="text-gray-900 font-medium">{formatCurrency(loan.principal)}</span> on <span className="text-gray-900 font-medium">{formatDate(loan.startDate)}</span></p>
           <p>Interest Rate: <span className="text-gray-900">{loan.annualRate}% per annum (reducing balance)</span></p>
+          {loan.emiDate && <p>EMI Date: <span className="text-gray-900">{loan.emiDate}{loan.emiDate === 1 ? 'st' : loan.emiDate === 2 ? 'nd' : loan.emiDate === 3 ? 'rd' : 'th'} of every month</span></p>}
+          {loan.actualEMI && <p>Actual EMI (per bank): <span className="text-gray-900">{formatCurrency(loan.actualEMI)}</span></p>}
           {loan.debitsFrom && <p>Debits From: <span className="text-gray-900">{loan.debitsFrom}</span></p>}
         </div>
 

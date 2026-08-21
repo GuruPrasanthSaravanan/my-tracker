@@ -349,6 +349,8 @@ export default function DebtsPage() {
             debitsFrom: selectedEMILoan.debitsFrom,
             status: selectedEMILoan.status,
             notes: selectedEMILoan.notes,
+            emiDate: selectedEMILoan.emiDate ? String(selectedEMILoan.emiDate) : '',
+            actualEMI: selectedEMILoan.actualEMI ? String(selectedEMILoan.actualEMI) : '',
           }}
           onSave={handleSaveEMI}
           onDelete={handleDeleteEMI}

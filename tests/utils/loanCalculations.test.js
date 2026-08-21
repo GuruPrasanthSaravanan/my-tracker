@@ -3,6 +3,7 @@ import {
   calculateEMI,
   buildAmortizationSchedule,
   computeEMIStatus,
+  countElapsedInstallments,
   computeSimpleInterestAccrued,
   splitPayment,
   presentValueOfAnnuity,
@@ -62,6 +63,36 @@ describe('buildAmortizationSchedule with prepayments', () => {
   });
 });
 
+describe('buildAmortizationSchedule with an actual EMI override', () => {
+  it('uses the provided actual EMI amount instead of the calculated one', () => {
+    const calculated = calculateEMI(100000, 12, 12);
+    const actualEMI = Math.round(calculated / 100) * 100; // bank-rounded to nearest 100
+    const schedule = buildAmortizationSchedule(100000, 12, 12, {}, actualEMI);
+
+    expect(schedule[0].emi).toBe(actualEMI);
+    expect(schedule[schedule.length - 1].balance).toBeCloseTo(0, 1);
+  });
+});
+
+describe('countElapsedInstallments', () => {
+  it('matches plain calendar-month counting when no emiDate is given (uses start day)', () => {
+    // Start and asOf both on the 1st - no partial-month ambiguity.
+    expect(countElapsedInstallments('2026-01-01', '2026-04-01')).toBe(3);
+  });
+
+  it('does not count the current month until the EMI date has passed', () => {
+    // Loan taken Jan 28, EMI debited on the 5th of each month.
+    // By Feb 3, the Feb 5th EMI hasn't happened yet.
+    expect(countElapsedInstallments('2026-01-28', '2026-02-03', 5)).toBe(0);
+    // By Feb 10, it has.
+    expect(countElapsedInstallments('2026-01-28', '2026-02-10', 5)).toBe(1);
+  });
+
+  it('never returns a negative count', () => {
+    expect(countElapsedInstallments('2026-06-01', '2026-01-01')).toBe(0);
+  });
+});
+
 describe('computeEMIStatus', () => {
   it('computes elapsed installments, outstanding balance, and totals as of a given date', () => {
     const status = computeEMIStatus({
@@ -101,6 +132,32 @@ describe('computeEMIStatus', () => {
     expect(status.effectiveTenureMonths).toBeLessThan(status.originalTenureMonths);
     expect(status.totalExtraPaid).toBe(30000);
     expect(status.nextDueDate).toBe('2026-04-01');
+  });
+
+  it('uses the emiDate to avoid over-counting installments near month boundaries', () => {
+    // Loan taken Jan 28, EMI debited on the 5th - as of Feb 3 the first EMI hasn't hit yet.
+    const status = computeEMIStatus({
+      principal: 100000,
+      annualRate: 12,
+      tenureMonths: 12,
+      startDate: '2026-01-28',
+      emiDate: 5,
+    }, '2026-02-03');
+
+    expect(status.installmentsPaid).toBe(0);
+    expect(status.outstandingBalance).toBe(100000);
+  });
+
+  it('uses actualEMI to report the bank-billed amount instead of the theoretical one', () => {
+    const status = computeEMIStatus({
+      principal: 100000,
+      annualRate: 12,
+      tenureMonths: 12,
+      startDate: '2026-01-01',
+      actualEMI: 9000,
+    }, '2026-04-01');
+
+    expect(status.emi).toBe(9000);
   });
 });
 

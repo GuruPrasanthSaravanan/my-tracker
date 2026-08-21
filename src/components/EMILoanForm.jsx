@@ -7,6 +7,7 @@ export default function EMILoanForm({ initial, onSave, onDelete, onClose }) {
   const [form, setForm] = useState(initial || {
     name: '', principal: '', annualRate: '', tenureMonths: '',
     startDate: today(), debitsFrom: '', status: 'Active', notes: '',
+    emiDate: '', actualEMI: '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -21,6 +22,7 @@ export default function EMILoanForm({ initial, onSave, onDelete, onClose }) {
     if (!form.principal) return setError('Please enter the principal amount you originally borrowed.');
     if (!form.tenureMonths) return setError('Please enter the tenure in months.');
     if (!form.startDate) return setError('Please enter the date you took the loan.');
+    if (form.emiDate && (form.emiDate < 1 || form.emiDate > 31)) return setError('EMI Date must be between 1 and 31.');
     setError('');
     setIsSaving(true);
     try {
@@ -83,6 +85,24 @@ export default function EMILoanForm({ initial, onSave, onDelete, onClose }) {
                 className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="text-xs text-gray-500">EMI Date (day of month)</label>
+              <input type="number" inputMode="numeric" min="1" max="31" value={form.emiDate}
+                onChange={(e) => set('emiDate', e.target.value)} disabled={busy}
+                placeholder="e.g., 5" className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500">Actual EMI (if different from calculated)</label>
+              <input type="number" inputMode="numeric" value={form.actualEMI}
+                onChange={(e) => set('actualEMI', e.target.value)} disabled={busy}
+                placeholder="leave blank to use calculated" className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
+            </div>
+          </div>
+          <p className="text-xs text-gray-400 -mt-1">
+            EMI Date helps count installments accurately near month boundaries. Actual EMI lets you match
+            your bank statement exactly if it's rounded differently from the calculated value.
+          </p>
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="text-xs text-gray-500">Debits From</label>

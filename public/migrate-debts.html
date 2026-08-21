@@ -125,7 +125,7 @@
     }
 
     const TAB_SCHEMAS = {
-      EMILoans: ['Name', 'Principal', 'AnnualRate', 'TenureMonths', 'StartDate', 'DebitsFrom', 'Status', 'Notes'],
+      EMILoans: ['Name', 'Principal', 'AnnualRate', 'TenureMonths', 'StartDate', 'DebitsFrom', 'Status', 'Notes', 'EMIDate', 'ActualEMI'],
       EMIPrepayments: ['LoanName', 'Date', 'Amount', 'Notes'],
       HandLoans: ['Name', 'Principal', 'AnnualRate', 'StartDate', 'Direction', 'DebitsFrom', 'Status', 'Notes'],
       HandLoanPayments: ['LoanName', 'Date', 'Amount', 'InterestPaid', 'PrincipalPaid', 'RemainingPrincipal'],
@@ -192,6 +192,10 @@
         tenureMonths: remainingMonths,
         startDate: todayStr,
         debitsFrom: loan.debitsFrom,
+        // ActualEMI: use the known bank-billed amount directly, since the principal above
+        // was itself back-solved to match this exact EMI - keeps future statements consistent
+        // even though the theoretical calculateEMI() on the rounded principal may differ by a rupee or two.
+        actualEMI: loan.emi,
       };
     }
 
@@ -222,9 +226,9 @@
         const emiRows = [
           ...legacyEmiLoans.map(computeLegacyEmiRow),
           ...freshEmiLoans,
-        ].map(r => [r.name, r.principal, r.annualRate, r.tenureMonths, r.startDate, r.debitsFrom, 'Active', '']);
+        ].map(r => [r.name, r.principal, r.annualRate, r.tenureMonths, r.startDate, r.debitsFrom, 'Active', '', '', r.actualEMI || '']);
 
-        await appendRows('EMILoans!A2:H', emiRows);
+        await appendRows('EMILoans!A2:J', emiRows);
         log(`EMI Loans: ${emiRows.length} loans migrated.`, 'ok');
 
         const handRows = handLoans.map(r => [
