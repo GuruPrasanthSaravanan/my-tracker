@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useAppData } from '../contexts/DataContext';
 import { computeMonthlyActuals } from '../utils/aggregations';
 import { formatCurrency, getTodayISO } from '../utils/formatters';
+import Dropdown from '../components/Dropdown';
 import Toast from '../components/Toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
-import { ChevronLeft, ChevronRight, Plus, X, Trash2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, Settings2 } from 'lucide-react';
 
 const SECTIONS = ['Income', 'My Outflows', 'Wife Outflows', 'Projects'];
 
@@ -19,7 +20,7 @@ function monthLabel(month) {
   return new Date(y, m - 1, 1).toLocaleString('en', { month: 'long', year: 'numeric' });
 }
 
-function PlanForm({ initial, month, onSave, onDelete, onClose }) {
+function PlanForm({ initial, month, categoryOptions, onAddCategory, onSave, onDelete, onClose, title = 'Planned Category' }) {
   const [form, setForm] = useState(initial || { category: '', plannedAmount: '', section: SECTIONS[1] });
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -30,7 +31,7 @@ function PlanForm({ initial, month, onSave, onDelete, onClose }) {
 
   const handleSubmit = async () => {
     if (busy) return;
-    if (!form.category.trim()) return setError('Please enter a category name.');
+    if (!form.category.trim()) return setError('Please choose a category.');
     if (!form.plannedAmount) return setError('Please enter a planned amount.');
     setError('');
     setIsSaving(true);
@@ -55,18 +56,19 @@ function PlanForm({ initial, month, onSave, onDelete, onClose }) {
     <div className="fixed inset-0 bg-black/40 z-50 flex items-end">
       <div className="bg-white w-full rounded-t-2xl p-4 pb-8">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold">{initial ? 'Edit' : 'New'} Planned Category</h2>
+          <h2 className="text-lg font-bold">{initial ? 'Edit' : 'New'} {title}</h2>
           <button onClick={onClose} disabled={busy} className="p-1"><X size={20} /></button>
         </div>
         <div className="space-y-3">
           {error && <div className="bg-red-50 text-danger text-sm px-3 py-2 rounded-lg">{error}</div>}
-          <div>
-            <label className="text-xs text-gray-500">Category</label>
-            <input type="text" value={form.category} onChange={(e) => set('category', e.target.value)}
-              placeholder="e.g., SALARY, EMI, FAMILY (match a CashBook Type to auto-track Actual)"
-              disabled={busy || !!initial}
-              className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
-          </div>
+          <Dropdown
+            label="Category"
+            options={categoryOptions}
+            value={form.category}
+            onChange={(v) => set('category', v)}
+            onAddNew={onAddCategory}
+          />
+          <p className="text-xs text-gray-400 -mt-2">Matching a CashBook Type lets Actual auto-track from your entries.</p>
           <div>
             <label className="text-xs text-gray-500">Planned Amount</label>
             <input type="number" inputMode="numeric" value={form.plannedAmount}
@@ -101,7 +103,7 @@ function PlanForm({ initial, month, onSave, onDelete, onClose }) {
             ) : (
               <button onClick={() => setConfirmDelete(true)} disabled={busy}
                 className="w-full flex items-center justify-center gap-2 text-danger py-2 text-sm disabled:opacity-60">
-                <Trash2 size={16} /> Delete this category
+                <Trash2 size={16} /> Delete
               </button>
             )
           )}
@@ -111,13 +113,77 @@ function PlanForm({ initial, month, onSave, onDelete, onClose }) {
   );
 }
 
+function TemplateManager({ template, categoryOptions, onAddCategory, onSave, onDelete, onClose }) {
+  const [editingItem, setEditingItem] = useState(undefined); // undefined = list view, null = new item, object = editing
+
+  if (editingItem !== undefined) {
+    return (
+      <PlanForm
+        title="Template Category"
+        month={null}
+        categoryOptions={categoryOptions}
+        onAddCategory={onAddCategory}
+        initial={editingItem ? {
+          category: editingItem.category,
+          plannedAmount: String(editingItem.defaultPlannedAmount),
+          section: editingItem.section,
+        } : null}
+        onSave={async (entry) => {
+          await onSave(editingItem, { category: entry.category, section: entry.section, defaultPlannedAmount: entry.plannedAmount });
+          setEditingItem(undefined);
+        }}
+        onDelete={editingItem ? async () => { await onDelete(editingItem); setEditingItem(undefined); } : undefined}
+        onClose={() => setEditingItem(undefined)}
+      />
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-end">
+      <div className="bg-white w-full rounded-t-2xl p-4 pb-8 max-h-[80vh] overflow-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold">Monthly Template</h2>
+          <button onClick={onClose} className="p-1"><X size={20} /></button>
+        </div>
+        <p className="text-xs text-gray-400 mb-3">
+          Set this up once with your usual categories - then "Load Template" pre-fills any new month instead of starting blank.
+        </p>
+        <button onClick={() => setEditingItem(null)}
+          className="w-full flex items-center justify-center gap-2 bg-primary text-white py-2.5 rounded-xl font-medium text-sm mb-3">
+          <Plus size={16} /> Add Template Category
+        </button>
+        {template.length === 0 ? (
+          <p className="text-center text-gray-400 py-6 text-sm">No template categories yet.</p>
+        ) : (
+          <div className="bg-gray-50 rounded-xl overflow-hidden">
+            {template.map((t) => (
+              <button key={t._rowIndex} onClick={() => setEditingItem(t)}
+                className="w-full flex items-center justify-between px-3 py-2.5 border-b border-gray-200 last:border-0 text-left active:bg-gray-100">
+                <div>
+                  <p className="text-sm text-gray-900">{t.category}</p>
+                  <p className="text-xs text-gray-400">{t.section}</p>
+                </div>
+                <span className="text-sm text-gray-500">{formatCurrency(t.defaultPlannedAmount)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function MonthlyPage() {
-  const { monthly, cashBook } = useAppData();
+  const { monthly, cashBook, lists } = useAppData();
   const [month, setMonth] = useState(getTodayISO().slice(0, 7));
   const [showForm, setShowForm] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null);
+  const [showTemplate, setShowTemplate] = useState(false);
   const [toast, setToast] = useState(null);
   const notify = (message, type = 'success') => setToast({ message, type });
+
+  const categoryOptions = lists.lists.types || [];
+  const handleAddCategory = (value) => lists.addListItem('types', value);
 
   const actuals = computeMonthlyActuals(cashBook.rows, month);
   const monthPlans = monthly.plans.filter((p) => p.month === month);
@@ -162,6 +228,37 @@ export default function MonthlyPage() {
     }
   };
 
+  const handleLoadTemplate = async () => {
+    try {
+      await monthly.loadTemplateIntoMonth(month);
+      notify('Template loaded!');
+    } catch {
+      notify('Failed to load template.', 'error');
+    }
+  };
+
+  const handleSaveTemplateItem = async (existing, entry) => {
+    try {
+      if (existing) {
+        await monthly.editTemplateItem(existing._rowIndex, entry);
+      } else {
+        await monthly.addTemplateItem(entry);
+      }
+      notify('Template updated!');
+    } catch {
+      notify('Failed to save template item.', 'error');
+    }
+  };
+
+  const handleDeleteTemplateItem = async (existing) => {
+    try {
+      await monthly.deleteTemplateItem(existing._rowIndex);
+      notify('Removed from template.');
+    } catch {
+      notify('Failed to remove.', 'error');
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -183,17 +280,28 @@ export default function MonthlyPage() {
 
       {!hasPlans && previousMonthPlans.length > 0 && (
         <button onClick={handleCopyLastMonth}
-          className="w-full bg-blue-50 text-primary text-sm font-medium py-2.5 rounded-xl mb-4">
+          className="w-full bg-blue-50 text-primary text-sm font-medium py-2.5 rounded-xl mb-2">
           Copy plan from {monthLabel(previousMonth)}
+        </button>
+      )}
+      {!hasPlans && monthly.template.length > 0 && (
+        <button onClick={handleLoadTemplate}
+          className="w-full bg-blue-50 text-primary text-sm font-medium py-2.5 rounded-xl mb-4">
+          Load Default Template
         </button>
       )}
 
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-sm font-semibold text-gray-500">Categories ({monthPlans.length})</h2>
-        <button onClick={() => { setEditingPlan(null); setShowForm(true); }}
-          className="text-xs text-primary font-medium flex items-center gap-1">
-          <Plus size={14} /> Add Category
-        </button>
+        <div className="flex items-center gap-3">
+          <button onClick={() => setShowTemplate(true)} className="text-xs text-gray-500 font-medium flex items-center gap-1">
+            <Settings2 size={14} /> Template
+          </button>
+          <button onClick={() => { setEditingPlan(null); setShowForm(true); }}
+            className="text-xs text-primary font-medium flex items-center gap-1">
+            <Plus size={14} /> Add Category
+          </button>
+        </div>
       </div>
 
       {monthly.isLoading ? (
@@ -231,10 +339,23 @@ export default function MonthlyPage() {
       {showForm && (
         <PlanForm
           month={month}
+          categoryOptions={categoryOptions}
+          onAddCategory={handleAddCategory}
           initial={editingPlan ? { category: editingPlan.category, plannedAmount: String(editingPlan.plannedAmount), section: editingPlan.section } : null}
           onSave={handleSave}
           onDelete={editingPlan ? handleDelete : undefined}
           onClose={() => { setShowForm(false); setEditingPlan(null); }}
+        />
+      )}
+
+      {showTemplate && (
+        <TemplateManager
+          template={monthly.template}
+          categoryOptions={categoryOptions}
+          onAddCategory={handleAddCategory}
+          onSave={handleSaveTemplateItem}
+          onDelete={handleDeleteTemplateItem}
+          onClose={() => setShowTemplate(false)}
         />
       )}
 

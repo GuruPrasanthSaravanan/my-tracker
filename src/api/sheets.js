@@ -178,6 +178,33 @@ export async function createSheetTab(token, title) {
 }
 
 /**
+ * Permanently deletes a tab (sheet) from the spreadsheet via batchUpdate.
+ * Irreversible through this app (Google Sheets version history may allow
+ * manual recovery within the Sheets UI, but don't rely on it) - callers
+ * should always confirm with the user before invoking this.
+ * @param {string} token - OAuth access token
+ * @param {string} title - name of the tab to delete
+ * @returns {Promise<boolean>} whether a matching tab was found and deleted
+ */
+export async function deleteSheetTab(token, title) {
+  const url = `${BASE_URL}/${SPREADSHEET_ID}?fields=sheets.properties`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  await handleResponse(res);
+  const data = await res.json();
+  const sheet = (data.sheets || []).find((s) => s.properties.title === title);
+  if (!sheet) return false;
+
+  const batchUrl = `${BASE_URL}/${SPREADSHEET_ID}:batchUpdate`;
+  const res2 = await fetch(batchUrl, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ deleteSheet: { sheetId: sheet.properties.sheetId } }] }),
+  });
+  await handleResponse(res2);
+  return true;
+}
+
+/**
  * Ensures every tab in `schemas` exists in the spreadsheet, creating any that
  * are missing (with their header row) via the Sheets API directly - so the
  * user never has to manually create a tab in the Google Sheets UI. Safe to

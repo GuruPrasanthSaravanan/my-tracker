@@ -6,17 +6,25 @@ import { readSheet, appendRowAt, updateRow, clearRow } from '../api/sheets';
 //   Month: "YYYY-MM". Category: should match a CashBook Type for the Actual
 //   column to line up automatically. Section: Income | My Outflows | Wife
 //   Outflows | Projects (free text grouping label for display only).
+// MonthlyTemplate tab layout: [Category, Section, DefaultPlannedAmount] - a
+// reusable starting point (edited once, applied to any new month) so every
+// month doesn't start blank.
 export function useMonthly() {
   const { token } = useAuth();
   const [rows, setRows] = useState([]);
+  const [templateRows, setTemplateRows] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     if (!token) return;
     setIsLoading(true);
     try {
-      const data = await readSheet(token, 'MonthlyPlans!A2:D2000');
-      setRows(data);
+      const [planData, templateData] = await Promise.all([
+        readSheet(token, 'MonthlyPlans!A2:D2000'),
+        readSheet(token, 'MonthlyTemplate!A2:C200'),
+      ]);
+      setRows(planData);
+      setTemplateRows(templateData);
     } catch (err) {
       console.error('Failed to fetch MonthlyPlans:', err);
     } finally {
@@ -66,9 +74,48 @@ export function useMonthly() {
     await fetchData();
   }, [token, fetchData, rows, parsedPlans]);
 
+  const parsedTemplate = templateRows
+    .map((row, index) => ({
+      _rowIndex: index,
+      category: row[0] || '',
+      section: row[1] || '',
+      defaultPlannedAmount: parseFloat(row[2]) || 0,
+    }))
+    .filter((t) => t.category);
+
+  const addTemplateItem = useCallback(async (entry) => {
+    const values = [entry.category, entry.section || '', entry.defaultPlannedAmount || ''];
+    await appendRowAt(token, 'MonthlyTemplate', 'C', templateRows.length, values);
+    await fetchData();
+  }, [token, fetchData, templateRows]);
+
+  const editTemplateItem = useCallback(async (rowIndex, entry) => {
+    const sheetRow = rowIndex + 2;
+    const values = [entry.category, entry.section || '', entry.defaultPlannedAmount || ''];
+    await updateRow(token, `MonthlyTemplate!A${sheetRow}:C${sheetRow}`, values);
+    await fetchData();
+  }, [token, fetchData]);
+
+  const deleteTemplateItem = useCallback(async (rowIndex) => {
+    const sheetRow = rowIndex + 2;
+    await clearRow(token, `MonthlyTemplate!A${sheetRow}:C${sheetRow}`);
+    await fetchData();
+  }, [token, fetchData]);
+
+  /** Applies the saved template to a month, e.g. for a brand new month that has no plans yet. */
+  const loadTemplateIntoMonth = useCallback(async (month) => {
+    let nextRowCount = rows.length;
+    for (const t of parsedTemplate) {
+      await appendRowAt(token, 'MonthlyPlans', 'D', nextRowCount, [month, t.category, t.defaultPlannedAmount, t.section]);
+      nextRowCount++;
+    }
+    await fetchData();
+  }, [token, fetchData, rows, parsedTemplate]);
+
   return {
-    plans: parsedPlans, isLoading,
+    plans: parsedPlans, template: parsedTemplate, isLoading,
     addPlan, editPlan, deletePlan, copyMonthPlans,
+    addTemplateItem, editTemplateItem, deleteTemplateItem, loadTemplateIntoMonth,
     refresh: fetchData,
   };
 }

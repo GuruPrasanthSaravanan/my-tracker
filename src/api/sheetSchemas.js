@@ -19,7 +19,8 @@ export const SHEET_SCHEMAS = {
   HandLoanPayments: ['LoanName', 'Date', 'Amount', 'InterestPaid', 'PrincipalPaid', 'RemainingPrincipal'],
   CreditCards: ['Name', 'CreditLimit', 'InterestRateMonthly', 'DebitsFrom', 'Status', 'Notes'],
   CreditCardBills: ['CardName', 'StatementDate', 'DueDate', 'TotalAmountDue', 'MinimumAmountDue', 'PaymentMade', 'PaymentDate', 'Notes', 'IsEstimated'],
-  AccountSettings: ['Account', 'MinBalance'],
+  AccountSettings: ['Account', 'MinBalance', 'AccountNumber', 'IFSC', 'Branch', 'AccountType', 'Purpose', 'RMName', 'RMContact'],
   MonthlyPlans: ['Month', 'Category', 'PlannedAmount', 'Section'],
+  MonthlyTemplate: ['Category', 'Section', 'DefaultPlannedAmount'],
   NetWorthSnapshots: ['Date', 'AssetsTotal', 'LiabilitiesTotal', 'Notes'],
 };
