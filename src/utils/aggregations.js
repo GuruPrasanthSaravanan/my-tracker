@@ -65,6 +65,47 @@ export function computeProjectSpent(rows, projectCode) {
 }
 
 /**
+ * Sums CashBook Money IN/OUT grouped by Type, for entries within a given
+ * month, giving the "Actual" side of a Planned-vs-Actual comparison. Always
+ * computed live from the transaction log rather than manually entered,
+ * consistent with the app's existing pattern of deriving summaries from raw
+ * CashBook rows (see bugs-and-lessons.md §3.4).
+ * @param {string[][]} rows - CashBook rows [Date, Desc, Account, Type, IN, OUT]
+ * @param {string} month - "YYYY-MM"
+ * @returns {Map<string, number>} Type -> net actual (IN - OUT) for that month
+ */
+export function computeMonthlyActuals(rows, month) {
+  const result = new Map();
+  for (const row of rows) {
+    const date = row[0] || '';
+    if (!date.startsWith(month)) continue;
+    const type = row[3] || '';
+    const moneyIn = parseFloat(row[4]) || 0;
+    const moneyOut = parseFloat(row[5]) || 0;
+    result.set(type, (result.get(type) || 0) + moneyIn - moneyOut);
+  }
+  return result;
+}
+
+/**
+ * Total income, outflow, and surplus (income - outflow) from CashBook for a
+ * given month.
+ * @param {string[][]} rows - CashBook rows [Date, Desc, Account, Type, IN, OUT]
+ * @param {string} month - "YYYY-MM"
+ * @returns {{ totalIn: number, totalOut: number, surplus: number }}
+ */
+export function computeMonthSurplus(rows, month) {
+  let totalIn = 0;
+  let totalOut = 0;
+  for (const row of rows) {
+    if (!(row[0] || '').startsWith(month)) continue;
+    totalIn += parseFloat(row[4]) || 0;
+    totalOut += parseFloat(row[5]) || 0;
+  }
+  return { totalIn, totalOut, surplus: totalIn - totalOut };
+}
+
+/**
  * Projects a credit card's upcoming bill from CashBook activity, by treating
  * the card as a "virtual account" - every purchase on the card is logged as
  * a normal CashBook entry with Account = the card's exact name (Money Out for

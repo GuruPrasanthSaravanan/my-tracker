@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sumByField, computeVendorBalances, computeAccountBalances, computeProjectSpent, computeCashBookSpendForAccount } from '../../src/utils/aggregations';
+import { sumByField, computeVendorBalances, computeAccountBalances, computeProjectSpent, computeCashBookSpendForAccount, computeMonthlyActuals, computeMonthSurplus } from '../../src/utils/aggregations';
 
 describe('sumByField', () => {
   it('sums values grouped by a field', () => {
@@ -51,6 +51,50 @@ describe('computeProjectSpent', () => {
     expect(computeProjectSpent(vendorRows, 'Constr')).toBe(73000);
     expect(computeProjectSpent(vendorRows, 'Reno')).toBe(12000);
     expect(computeProjectSpent(vendorRows, 'Land')).toBe(0);
+  });
+});
+
+describe('computeMonthlyActuals', () => {
+  const rows = [
+    ['2026-09-01', 'Salary', 'ICICI', 'SALARY', '153000', ''],
+    ['2026-09-05', 'EMI', 'HDFC', 'EMI', '', '21000'],
+    ['2026-09-10', 'Groceries', 'ICICI', 'FAMILY', '', '8000'],
+    ['2026-10-01', 'Next month salary', 'ICICI', 'SALARY', '153000', ''],
+  ];
+
+  it('sums net actual (IN - OUT) grouped by Type, for the given month only', () => {
+    const result = computeMonthlyActuals(rows, '2026-09');
+    expect(result.get('SALARY')).toBe(153000);
+    expect(result.get('EMI')).toBe(-21000);
+    expect(result.get('FAMILY')).toBe(-8000);
+    expect(result.has('SALARY')).toBe(true);
+  });
+
+  it('excludes entries from other months', () => {
+    const result = computeMonthlyActuals(rows, '2026-10');
+    expect(result.get('SALARY')).toBe(153000);
+    expect(result.has('EMI')).toBe(false);
+  });
+});
+
+describe('computeMonthSurplus', () => {
+  const rows = [
+    ['2026-09-01', 'Salary', 'ICICI', 'SALARY', '153000', ''],
+    ['2026-09-05', 'EMI', 'HDFC', 'EMI', '', '21000'],
+    ['2026-09-10', 'Groceries', 'ICICI', 'FAMILY', '', '8000'],
+    ['2026-10-01', 'Next month', 'ICICI', 'SALARY', '200000', ''],
+  ];
+
+  it('computes total income, outflow, and surplus for a given month', () => {
+    const result = computeMonthSurplus(rows, '2026-09');
+    expect(result.totalIn).toBe(153000);
+    expect(result.totalOut).toBe(29000);
+    expect(result.surplus).toBe(124000);
+  });
+
+  it('returns zeroes for a month with no entries', () => {
+    const result = computeMonthSurplus(rows, '2026-01');
+    expect(result).toEqual({ totalIn: 0, totalOut: 0, surplus: 0 });
   });
 });
 

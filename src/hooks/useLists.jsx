@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
-import { fetchLists, addToList } from '../api/lists';
+import { fetchLists, addToList, removeFromList } from '../api/lists';
 
 export function useLists() {
   const { token } = useAuth();
@@ -33,5 +33,17 @@ export function useLists() {
     return result.value;
   }, [token]);
 
-  return { lists, isLoading, addListItem, refresh };
+  const removeListItem = useCallback(async (listName, value) => {
+    if (!token) return;
+    const removed = await removeFromList(token, listName, value);
+    if (removed) {
+      setLists((prev) => ({
+        ...prev,
+        [listName]: prev[listName].filter((v) => v !== value),
+      }));
+    }
+    return removed;
+  }, [token]);
+
+  return { lists, isLoading, addListItem, removeListItem, refresh };
 }

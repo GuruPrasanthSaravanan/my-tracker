@@ -1,4 +1,4 @@
-import { readSheet, updateRow } from './sheets';
+import { readSheet, updateRow, clearRow } from './sheets';
 
 /**
  * Fetch all dropdown lists from the Lists tab.
@@ -54,4 +54,28 @@ export async function addToList(token, listName, value) {
   const nextRow = rows.length + 2; // +2 because data starts at row 2
   await updateRow(token, `Lists!${col}${nextRow}`, [trimmed]);
   return { added: true, value: trimmed };
+}
+
+/**
+ * Removes a value from a list column (used by the Settings "Manage Lists"
+ * screen). Clears the cell rather than shifting rows up, consistent with how
+ * every other tab in the app "deletes" a row - see bugs-and-lessons.md §9.5
+ * for why row gaps are an accepted, intentional trade-off here.
+ * @param {string} token
+ * @param {'accounts'|'types'|'vendors'|'projects'|'milestoneStatuses'} listName
+ * @param {string} value
+ * @returns {Promise<boolean>} whether a matching row was found and cleared
+ */
+export async function removeFromList(token, listName, value) {
+  const colMap = { accounts: 'A', types: 'B', vendors: 'C', projects: 'D', milestoneStatuses: 'E' };
+  const col = colMap[listName];
+  if (!col) throw new Error(`Unknown list: ${listName}`);
+
+  const rows = await readSheet(token, `Lists!${col}2:${col}100`);
+  const rowIndex = rows.findIndex((r) => (r[0] || '').trim() === value);
+  if (rowIndex === -1) return false;
+
+  const sheetRow = rowIndex + 2;
+  await clearRow(token, `Lists!${col}${sheetRow}`);
+  return true;
 }

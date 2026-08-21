@@ -6,6 +6,10 @@ import CashBookPage from '../pages/CashBookPage';
 import VendorsPage from '../pages/VendorsPage';
 import ProjectsPage from '../pages/ProjectsPage';
 import DebtsPage from '../pages/DebtsPage';
+import DashboardPage from '../pages/DashboardPage';
+import MonthlyPage from '../pages/MonthlyPage';
+import NetWorthPage from '../pages/NetWorthPage';
+import SettingsPage from '../pages/SettingsPage';
 
 export default function Layout() {
   const { user, signOut } = useAuth();
@@ -22,11 +26,15 @@ export default function Layout() {
       <main className="px-4 pt-4">
         <DataProvider>
           <Routes>
-            <Route path="/" element={<Navigate to="/cashbook" replace />} />
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/cashbook" element={<CashBookPage />} />
             <Route path="/vendors" element={<VendorsPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/debts" element={<DebtsPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/monthly" element={<MonthlyPage />} />
+            <Route path="/networth" element={<NetWorthPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </DataProvider>
       </main>

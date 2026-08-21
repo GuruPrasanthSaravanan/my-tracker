@@ -149,3 +149,50 @@ export async function clearRow(token, range) {
   });
   await handleResponse(res);
 }
+
+/**
+ * Returns the names of every tab (sheet) that currently exists in the spreadsheet.
+ * @param {string} token - OAuth access token
+ */
+export async function getSheetTitles(token) {
+  const url = `${BASE_URL}/${SPREADSHEET_ID}?fields=sheets.properties.title`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  await handleResponse(res);
+  const data = await res.json();
+  return (data.sheets || []).map((s) => s.properties.title);
+}
+
+/**
+ * Creates a new tab (sheet) via the Sheets API's batchUpdate addSheet request.
+ * @param {string} token - OAuth access token
+ * @param {string} title - name of the new tab
+ */
+export async function createSheetTab(token, title) {
+  const url = `${BASE_URL}/${SPREADSHEET_ID}:batchUpdate`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests: [{ addSheet: { properties: { title } } }] }),
+  });
+  await handleResponse(res);
+}
+
+/**
+ * Ensures every tab in `schemas` exists in the spreadsheet, creating any that
+ * are missing (with their header row) via the Sheets API directly - so the
+ * user never has to manually create a tab in the Google Sheets UI. Safe to
+ * call on every app load: a single `getSheetTitles` read up front means tabs
+ * that already exist cost nothing extra.
+ * @param {string} token - OAuth access token
+ * @param {Object<string, string[]>} schemas - tabName -> array of header column names
+ */
+export async function ensureTabsExist(token, schemas) {
+  const existingTitles = await getSheetTitles(token);
+  const missing = Object.entries(schemas).filter(([name]) => !existingTitles.includes(name));
+  if (missing.length === 0) return;
+
+  for (const [tabName, headers] of missing) {
+    await createSheetTab(token, tabName);
+    await updateRow(token, `${tabName}!A1`, headers);
+  }
+}

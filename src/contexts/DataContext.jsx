@@ -1,4 +1,7 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext, useEffect, useRef } from 'react';
+import { useAuth } from '../auth/useAuth';
+import { ensureTabsExist } from '../api/sheets';
+import { SHEET_SCHEMAS } from '../api/sheetSchemas';
 import { useCashBook } from '../hooks/useCashBook';
 import { useVendors } from '../hooks/useVendors';
 import { useProjects } from '../hooks/useProjects';
@@ -7,6 +10,8 @@ import { useHandLoans } from '../hooks/useHandLoans';
 import { useCreditCards } from '../hooks/useCreditCards';
 import { useLists } from '../hooks/useLists';
 import { useAccountSettings } from '../hooks/useAccountSettings';
+import { useMonthly } from '../hooks/useMonthly';
+import { useNetWorth } from '../hooks/useNetWorth';
 
 const DataContext = createContext(null);
 
@@ -23,6 +28,7 @@ const DataContext = createContext(null);
  * made from the app.
  */
 export function DataProvider({ children }) {
+  const { token } = useAuth();
   const cashBook = useCashBook();
   const vendors = useVendors();
   const projects = useProjects();
@@ -31,9 +37,28 @@ export function DataProvider({ children }) {
   const creditCards = useCreditCards();
   const lists = useLists();
   const accountSettings = useAccountSettings();
+  const monthly = useMonthly();
+  const netWorth = useNetWorth();
+
+  // Auto-provision any tab this app needs that doesn't exist yet (e.g. a brand
+  // new tab introduced in this release, like MonthlyPlans/NetWorthSnapshots) -
+  // the user should never have to manually create a tab in the Sheets UI.
+  // Runs once per sign-in; refreshes the two newest hooks afterward in case
+  // their tab didn't exist yet on their very first fetch this session.
+  const provisioned = useRef(false);
+  useEffect(() => {
+    if (!token || provisioned.current) return;
+    provisioned.current = true;
+    ensureTabsExist(token, SHEET_SCHEMAS)
+      .then(() => {
+        monthly.refresh();
+        netWorth.refresh();
+      })
+      .catch((err) => console.error('Failed to auto-provision sheet tabs:', err));
+  }, [token]);
 
   return (
-    <DataContext.Provider value={{ cashBook, vendors, projects, emiLoans, handLoans, creditCards, lists, accountSettings }}>
+    <DataContext.Provider value={{ cashBook, vendors, projects, emiLoans, handLoans, creditCards, lists, accountSettings, monthly, netWorth }}>
       {children}
     </DataContext.Provider>
   );
