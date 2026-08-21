@@ -4,6 +4,7 @@ import { useVendors } from '../hooks/useVendors';
 import { useProjects } from '../hooks/useProjects';
 import { useDebts } from '../hooks/useDebts';
 import { useLists } from '../hooks/useLists';
+import { useAccountSettings } from '../hooks/useAccountSettings';
 
 const DataContext = createContext(null);
 
@@ -23,9 +24,10 @@ export function DataProvider({ children }) {
   const projects = useProjects();
   const debts = useDebts();
   const lists = useLists();
+  const accountSettings = useAccountSettings();
 
   return (
-    <DataContext.Provider value={{ cashBook, vendors, projects, debts, lists }}>
+    <DataContext.Provider value={{ cashBook, vendors, projects, debts, lists, accountSettings }}>
       {children}
     </DataContext.Provider>
   );

@@ -6,14 +6,17 @@ import FAB from '../components/FAB';
 import Toast from '../components/Toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import EntryForm from '../components/EntryForm';
+import ReconcileModal from '../components/ReconcileModal';
 import { formatCurrency } from '../utils/formatters';
 
 export default function CashBookPage() {
-  const { cashBook, lists: listsData } = useAppData();
+  const { cashBook, lists: listsData, accountSettings } = useAppData();
   const { rows, isLoading, addEntry, editEntry, deleteEntry, totalBalance, accountBalances } = cashBook;
   const { lists, addListItem } = listsData;
+  const { minBalances, setMinBalance } = accountSettings;
   const [showForm, setShowForm] = useState(false);
   const [editingRow, setEditingRow] = useState(null); // { index, data }
+  const [reconcileAccount, setReconcileAccount] = useState(null);
   const [toast, setToast] = useState(null);
 
   const handleSave = async (entry) => {
@@ -61,6 +64,34 @@ export default function CashBookPage() {
     });
   };
 
+  const handleSaveCorrection = async (diff) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      await addEntry({
+        date: today,
+        description: 'Balance correction',
+        account: reconcileAccount,
+        type: 'ADJUSTMENT',
+        moneyIn: diff > 0 ? diff : '',
+        moneyOut: diff < 0 ? Math.abs(diff) : '',
+      });
+      // Best-effort: register ADJUSTMENT as a known Type for future manual entries.
+      addListItem('types', 'ADJUSTMENT').catch(() => {});
+      setToast({ message: 'Balance corrected!', type: 'success' });
+    } catch {
+      setToast({ message: 'Failed to save correction.', type: 'error' });
+    }
+  };
+
+  const handleSaveMinBalance = async (value) => {
+    try {
+      await setMinBalance(reconcileAccount, value);
+      setToast({ message: 'Minimum balance saved!', type: 'success' });
+    } catch {
+      setToast({ message: 'Failed to save minimum balance.', type: 'error' });
+    }
+  };
+
   return (
     <div>
       {/* Summary Section */}
@@ -81,6 +112,8 @@ export default function CashBookPage() {
                 label={account}
                 amount={balance}
                 color={balance > 0 ? 'green' : balance < 0 ? 'red' : 'gray'}
+                minBalance={minBalances.get(account)}
+                onClick={() => setReconcileAccount(account)}
               />
             ))}
         </div>
@@ -135,6 +168,17 @@ export default function CashBookPage() {
           onSave={handleEdit}
           onDelete={handleDelete}
           onClose={() => setEditingRow(null)}
+        />
+      )}
+
+      {reconcileAccount && (
+        <ReconcileModal
+          account={reconcileAccount}
+          currentBalance={accountBalances.get(reconcileAccount) || 0}
+          minBalance={minBalances.get(reconcileAccount)}
+          onSaveCorrection={handleSaveCorrection}
+          onSaveMinBalance={handleSaveMinBalance}
+          onClose={() => setReconcileAccount(null)}
         />
       )}
 
