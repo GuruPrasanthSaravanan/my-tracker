@@ -302,3 +302,64 @@ export function projectCreditCardPayoff(outstanding, monthlyRatePercent, minDueP
     neverPaysOff: balance > 1,
   };
 }
+
+/**
+ * Determines whether interest is actually accruing on a credit card bill yet,
+ * based on the Due Date - not just whether it's unpaid. Indian card issuers
+ * (HDFC/ICICI/SBI/Axis) only withdraw the interest-free grace period if the
+ * Total Amount Due is still unpaid *as of the due date*; paying part of the
+ * bill before the due date does not itself trigger interest. Once the due
+ * date passes without full payment, interest technically backdates to each
+ * transaction's date - but since this app only tracks one aggregate
+ * Total Amount Due per cycle (not per-transaction dates), we approximate by
+ * accruing simple interest from the Due Date itself, prorated by the actual
+ * number of days overdue (average-daily-balance style), which understates
+ * true interest slightly but avoids the bigger error of charging a full
+ * month's interest on day one of being overdue.
+ * @param {{ totalAmountDue: number, paymentMade: number, dueDate: string }} bill
+ * @param {number} monthlyRatePercent
+ * @param {string|Date} asOfDate
+ * @returns {{
+ *   outstanding: number,
+ *   isPaidInFull: boolean,
+ *   interestAccruing: boolean,
+ *   daysPastDue: number,
+ *   accruedInterestSinceDue: number,
+ *   effectiveBalance: number,
+ * }}
+ */
+export function computeCreditCardInterestState(bill, monthlyRatePercent, asOfDate = new Date()) {
+  const outstanding = Math.max((bill.totalAmountDue || 0) - (bill.paymentMade || 0), 0);
+
+  if (outstanding <= 0) {
+    return {
+      outstanding: 0, isPaidInFull: true, interestAccruing: false,
+      daysPastDue: 0, accruedInterestSinceDue: 0, effectiveBalance: 0,
+    };
+  }
+
+  const due = new Date(bill.dueDate);
+  const now = new Date(asOfDate);
+  const daysPastDue = Math.max(0, Math.floor((now.getTime() - due.getTime()) / MS_PER_DAY));
+
+  if (daysPastDue <= 0) {
+    // Due date hasn't passed yet - still within the payment window, no interest yet.
+    return {
+      outstanding, isPaidInFull: false, interestAccruing: false,
+      daysPastDue: 0, accruedInterestSinceDue: 0, effectiveBalance: outstanding,
+    };
+  }
+
+  // Simple (non-compounding) daily proration for the stub period since the due date.
+  const dailyRate = monthlyRatePercent / 100 / 30;
+  const accruedInterestSinceDue = outstanding * dailyRate * daysPastDue;
+
+  return {
+    outstanding,
+    isPaidInFull: false,
+    interestAccruing: true,
+    daysPastDue,
+    accruedInterestSinceDue,
+    effectiveBalance: outstanding + accruedInterestSinceDue,
+  };
+}

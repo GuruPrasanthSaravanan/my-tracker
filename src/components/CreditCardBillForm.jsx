@@ -43,6 +43,10 @@ export default function CreditCardBillForm({ cardName, initial, isEditing, prefi
         ...form,
         cardName,
         minimumAmountDue: form.minimumAmountDue || suggestedMinDue,
+        // Only a brand-new bill created from the CashBook projection shortcut is
+        // marked estimated; editing an existing bill always confirms/corrects it
+        // (see useCreditCards.editBill, which clears this regardless of what's passed).
+        isEstimated: !isEditing && prefillTotalAmountDue != null,
       });
     } finally {
       setIsSaving(false);

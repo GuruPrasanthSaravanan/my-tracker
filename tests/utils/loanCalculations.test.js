@@ -9,6 +9,7 @@ import {
   presentValueOfAnnuity,
   computeMinimumDue,
   projectCreditCardPayoff,
+  computeCreditCardInterestState,
 } from '../../src/utils/loanCalculations';
 
 describe('calculateEMI', () => {
@@ -305,5 +306,46 @@ describe('projectCreditCardPayoff', () => {
     const result = projectCreditCardPayoff(1000000, 3.5, 3.51, 200, 24);
     expect(result.neverPaysOff).toBe(true);
     expect(result.monthsToPayoff).toBeNull();
+  });
+});
+
+describe('computeCreditCardInterestState', () => {
+  it('reports no interest and isPaidInFull when the bill is fully paid', () => {
+    const state = computeCreditCardInterestState(
+      { totalAmountDue: 50000, paymentMade: 50000, dueDate: '2026-08-01' }, 3.5, '2026-09-01'
+    );
+    expect(state.isPaidInFull).toBe(true);
+    expect(state.interestAccruing).toBe(false);
+    expect(state.accruedInterestSinceDue).toBe(0);
+  });
+
+  it('does not accrue interest yet if a partial payment was made but the due date has not passed', () => {
+    const state = computeCreditCardInterestState(
+      { totalAmountDue: 50000, paymentMade: 20000, dueDate: '2026-08-20' }, 3.5, '2026-08-10'
+    );
+    expect(state.outstanding).toBe(30000);
+    expect(state.interestAccruing).toBe(false);
+    expect(state.accruedInterestSinceDue).toBe(0);
+    expect(state.effectiveBalance).toBe(30000);
+  });
+
+  it('does not accrue interest on the due date itself (0 days past due)', () => {
+    const state = computeCreditCardInterestState(
+      { totalAmountDue: 50000, paymentMade: 0, dueDate: '2026-08-20' }, 3.5, '2026-08-20'
+    );
+    expect(state.interestAccruing).toBe(false);
+    expect(state.daysPastDue).toBe(0);
+  });
+
+  it('prorates a small stub interest amount for the days actually overdue, not a full month', () => {
+    const state = computeCreditCardInterestState(
+      { totalAmountDue: 50000, paymentMade: 0, dueDate: '2026-08-20' }, 3.5, '2026-08-25' // 5 days overdue
+    );
+    expect(state.interestAccruing).toBe(true);
+    expect(state.daysPastDue).toBe(5);
+    // 50000 * 0.035 * (5/30) ~= 291.67 - much less than a full month's 1750
+    expect(state.accruedInterestSinceDue).toBeCloseTo(50000 * 0.035 * (5 / 30), 2);
+    expect(state.accruedInterestSinceDue).toBeLessThan(50000 * 0.035);
+    expect(state.effectiveBalance).toBeCloseTo(50000 + state.accruedInterestSinceDue, 2);
   });
 });
