@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
-import { readSheet, appendRow, updateRow, clearRow } from '../api/sheets';
+import { readSheet, appendRowAt, updateRow, clearRow } from '../api/sheets';
 import { computeEMIStatus } from '../utils/loanCalculations';
 
 // EMILoans tab layout: [Name, Principal, AnnualRate, TenureMonths, StartDate, DebitsFrom,
@@ -42,9 +42,9 @@ export function useEMILoans() {
       entry.startDate, entry.debitsFrom || '', entry.status || 'Active', entry.notes || '',
       entry.emiDate || '', entry.actualEMI || '',
     ];
-    await appendRow(token, 'EMILoans!A:J', values);
+    await appendRowAt(token, 'EMILoans', 'J', rows.length, values);
     await fetchData();
-  }, [token, fetchData]);
+  }, [token, fetchData, rows]);
 
   const editLoan = useCallback(async (rowIndex, entry) => {
     const sheetRow = rowIndex + 2;
@@ -64,9 +64,9 @@ export function useEMILoans() {
   }, [token, fetchData]);
 
   const addPrepayment = useCallback(async (loanName, date, amount, notes = '') => {
-    await appendRow(token, 'EMIPrepayments!A:D', [loanName, date, amount, notes]);
+    await appendRowAt(token, 'EMIPrepayments', 'D', prepaymentRows.length, [loanName, date, amount, notes]);
     await fetchData();
-  }, [token, fetchData]);
+  }, [token, fetchData, prepaymentRows]);
 
   const editPrepayment = useCallback(async (prepaymentIndex, values) => {
     const sheetRow = prepaymentIndex + 2;

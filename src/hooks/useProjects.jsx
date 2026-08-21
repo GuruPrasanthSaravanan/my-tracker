@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
-import { readSheet, appendRow, updateRow } from '../api/sheets';
+import { readSheet, appendRowAt, updateRow } from '../api/sheets';
 
 export function useProjects() {
   const { token } = useAuth();
@@ -34,9 +34,9 @@ export function useProjects() {
       entry.startDate || '', entry.endDatePlanned || '', '',
       entry.manager || '', entry.status || 'Not Started', entry.notes || '',
     ];
-    await appendRow(token, 'Projects!A:M', values);
+    await appendRowAt(token, 'Projects', 'M', projects.length, values);
     await fetchData();
-  }, [token, fetchData]);
+  }, [token, fetchData, projects]);
 
   const editProject = useCallback(async (rowIndex, entry) => {
     const sheetRow = rowIndex + 2;
@@ -56,9 +56,9 @@ export function useProjects() {
       entry.plannedDate || '', entry.actualDate || '',
       entry.status || 'Not Started', entry.notes || '',
     ];
-    await appendRow(token, 'Milestones!A:F', values);
+    await appendRowAt(token, 'Milestones', 'F', milestones.length, values);
     await fetchData();
-  }, [token, fetchData]);
+  }, [token, fetchData, milestones]);
 
   const parsedProjects = projects.map((row, index) => ({
     _rowIndex: index,

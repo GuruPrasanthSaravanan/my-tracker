@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
-import { readSheet, appendRow, updateRow, clearRow } from '../api/sheets';
+import { readSheet, appendRowAt, updateRow, clearRow } from '../api/sheets';
 import { computeMinimumDue, projectCreditCardPayoff } from '../utils/loanCalculations';
 
 // CreditCards tab layout: [Name, CreditLimit, InterestRateMonthly, DebitsFrom, Status, Notes]
@@ -36,9 +36,9 @@ export function useCreditCards() {
       entry.name, entry.creditLimit || '', entry.interestRateMonthly || 3.5,
       entry.debitsFrom || '', entry.status || 'Active', entry.notes || '',
     ];
-    await appendRow(token, 'CreditCards!A:F', values);
+    await appendRowAt(token, 'CreditCards', 'F', rows.length, values);
     await fetchData();
-  }, [token, fetchData]);
+  }, [token, fetchData, rows]);
 
   const editCard = useCallback(async (rowIndex, entry) => {
     const sheetRow = rowIndex + 2;
@@ -62,9 +62,9 @@ export function useCreditCards() {
       entry.cardName, entry.statementDate, entry.dueDate, entry.totalAmountDue,
       minimumAmountDue, entry.paymentMade || '', entry.paymentDate || '', entry.notes || '',
     ];
-    await appendRow(token, 'CreditCardBills!A:H', values);
+    await appendRowAt(token, 'CreditCardBills', 'H', billRows.length, values);
     await fetchData();
-  }, [token, fetchData]);
+  }, [token, fetchData, billRows]);
 
   const editBill = useCallback(async (billIndex, entry) => {
     const sheetRow = billIndex + 2;

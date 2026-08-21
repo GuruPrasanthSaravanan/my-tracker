@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
-import { readSheet, appendRow, updateRow } from '../api/sheets';
+import { readSheet, appendRowAt, updateRow } from '../api/sheets';
 
 // AccountSettings tab layout: [Account, MinBalance] - one row per account,
 // unlike the Lists tab's independent parallel columns, since this data is a
@@ -38,7 +38,7 @@ export function useAccountSettings() {
       const sheetRow = existingIndex + 2;
       await updateRow(token, `AccountSettings!A${sheetRow}:B${sheetRow}`, [account, minBalance]);
     } else {
-      await appendRow(token, 'AccountSettings!A:B', [account, minBalance]);
+      await appendRowAt(token, 'AccountSettings', 'B', rows.length, [account, minBalance]);
     }
     await fetchData();
   }, [token, fetchData, rows]);

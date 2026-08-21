@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
-import { readSheet, appendRow, updateRow, clearRow } from '../api/sheets';
+import { readSheet, appendRowAt, updateRow, clearRow } from '../api/sheets';
 import { computeAccountBalances, sumByField } from '../utils/aggregations';
 
 export function useCashBook() {
@@ -31,9 +31,9 @@ export function useCashBook() {
       entry.date, entry.description, entry.account, entry.type,
       entry.moneyIn || '', entry.moneyOut || '',
     ];
-    await appendRow(token, 'CashBook!A:F', values);
+    await appendRowAt(token, 'CashBook', 'F', rows.length, values);
     await fetchData();
-  }, [token, fetchData]);
+  }, [token, fetchData, rows]);
 
   const editEntry = useCallback(async (rowIndex, entry) => {
     const sheetRow = rowIndex + 2; // +2 because row 1 is header, data starts at row 2

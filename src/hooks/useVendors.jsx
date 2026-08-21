@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
-import { readSheet, appendRow, updateRow, clearRow } from '../api/sheets';
+import { readSheet, appendRowAt, updateRow, clearRow } from '../api/sheets';
 import { computeVendorBalances, sumByField } from '../utils/aggregations';
 
 export function useVendors() {
@@ -31,9 +31,9 @@ export function useVendors() {
       entry.date, entry.vendor, entry.description, entry.project,
       entry.bill || '', entry.paid || '',
     ];
-    await appendRow(token, 'Vendors!A:F', values);
+    await appendRowAt(token, 'Vendors', 'F', rows.length, values);
     await fetchData();
-  }, [token, fetchData]);
+  }, [token, fetchData, rows]);
 
   const editEntry = useCallback(async (rowIndex, entry) => {
     const sheetRow = rowIndex + 2;

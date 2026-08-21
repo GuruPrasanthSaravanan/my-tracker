@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
-import { readSheet, appendRow, updateRow, clearRow } from '../api/sheets';
+import { readSheet, appendRowAt, updateRow, clearRow } from '../api/sheets';
 import { computeSimpleInterestAccrued, splitPayment } from '../utils/loanCalculations';
 
 // HandLoans tab layout: [Name, Principal, AnnualRate, StartDate, Direction, DebitsFrom, Status, Notes]
@@ -37,9 +37,9 @@ export function useHandLoans() {
       entry.name, entry.principal, entry.annualRate || 0, entry.startDate,
       entry.direction || 'Owe', entry.debitsFrom || '', entry.status || 'Active', entry.notes || '',
     ];
-    await appendRow(token, 'HandLoans!A:H', values);
+    await appendRowAt(token, 'HandLoans', 'H', rows.length, values);
     await fetchData();
-  }, [token, fetchData]);
+  }, [token, fetchData, rows]);
 
   const editLoan = useCallback(async (rowIndex, entry) => {
     const sheetRow = rowIndex + 2;
@@ -128,11 +128,11 @@ export function useHandLoans() {
     const remainingPrincipal = Math.max(state.outstandingPrincipal - principalPaid, 0);
 
     const values = [loanName, date, amount, interestPaid, principalPaid, remainingPrincipal];
-    await appendRow(token, 'HandLoanPayments!A:F', values);
+    await appendRowAt(token, 'HandLoanPayments', 'F', paymentRows.length, values);
     await fetchData();
 
     return { interestPaid, principalPaid, remainingPrincipal };
-  }, [token, fetchData, parsedLoans, parsedPayments]);
+  }, [token, fetchData, parsedLoans, parsedPayments, paymentRows]);
 
   const editPayment = useCallback(async (paymentIndex, values) => {
     const sheetRow = paymentIndex + 2;

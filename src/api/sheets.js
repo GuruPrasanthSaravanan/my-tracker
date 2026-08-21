@@ -43,6 +43,17 @@ export async function readSheet(token, range) {
 
 /**
  * Append a row to the spreadsheet.
+ *
+ * CAUTION: The Sheets API's `:append` endpoint auto-detects "the table" within
+ * the given range and appends after it, anchored to whatever column that
+ * detected table happens to start at - not necessarily column A. If a row
+ * anywhere in the range has stray content only in a later column (e.g. a
+ * leftover value in a "blank" row that wasn't fully cleared, or a manual
+ * edit), the appended row can land shifted several columns to the right of
+ * where it should be, corrupting the data silently. Prefer `appendRowAt`
+ * below, which writes to an explicitly computed row/column range instead of
+ * relying on this auto-detection. Kept for the few callers where the
+ * existing row count isn't readily available.
  * @param {string} token - OAuth access token
  * @param {string} range - e.g., "CashBook!A:G"
  * @param {string[]} values - single row of values
@@ -58,6 +69,23 @@ export async function appendRow(token, range, values) {
     body: JSON.stringify({ values: [values] }),
   });
   await handleResponse(res);
+}
+
+/**
+ * Writes a new row to an explicit, unambiguous row/column range instead of
+ * relying on the Sheets API's auto-detected table boundaries (see the
+ * warning on `appendRow` above). This is the preferred way to add a new row
+ * - callers should pass the current number of data rows already read (e.g.
+ * from the hook's own state), and this computes the next row deterministically.
+ * @param {string} token - OAuth access token
+ * @param {string} sheetName - e.g. "HandLoans"
+ * @param {string} lastCol - last column letter of the row's data, e.g. "H"
+ * @param {number} currentRowCount - number of existing data rows (excluding the header)
+ * @param {string[]} values - row values to write
+ */
+export async function appendRowAt(token, sheetName, lastCol, currentRowCount, values) {
+  const rowNumber = currentRowCount + 2; // +2: row 1 is the header, data starts at row 2
+  await updateRow(token, `${sheetName}!A${rowNumber}:${lastCol}${rowNumber}`, values);
 }
 
 /**
