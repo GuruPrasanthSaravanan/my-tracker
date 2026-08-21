@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyTracker - Migrate Debts to EMI/Hand Loans</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 20px; }
+    button { padding: 12px 24px; font-size: 16px; cursor: pointer; border: none; border-radius: 8px; margin: 4px 4px 4px 0; }
+    .primary { background: #2563eb; color: white; }
+    .status { margin: 8px 0; padding: 8px; border-radius: 4px; font-size: 14px; }
+    .status.ok { background: #dcfce7; color: #166534; }
+    .status.err { background: #fee2e2; color: #991b1b; }
+    .status.info { background: #dbeafe; color: #1e40af; }
+    table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13px; }
+    th, td { border: 1px solid #e5e7eb; padding: 6px 8px; text-align: left; }
+    th { background: #f9fafb; }
+  </style>
+</head>
+<body>
+  <h1>Migrate Debts &rarr; EMI Loans / Hand Loans</h1>
+  <p>
+    This is a <strong>one-time migration</strong> for your existing Debts tab entries into the new
+    <strong>EMILoans</strong> and <strong>HandLoans</strong> tabs. Your original Debts tab is left untouched
+    as a backup - this only <em>adds</em> rows to the new tabs.
+  </p>
+  <p style="color:#991b1b">
+    <strong>Before running:</strong> make sure you've created 3 new tabs in your Google Sheet with these exact
+    headers in row 1:<br>
+    <strong>EMILoans</strong>: Name, Principal, AnnualRate, TenureMonths, StartDate, DebitsFrom, Status, Notes<br>
+    <strong>HandLoans</strong>: Name, Principal, AnnualRate, StartDate, Direction, DebitsFrom, Status, Notes<br>
+    <strong>HandLoanPayments</strong>: LoanName, Date, Amount, InterestPaid, PrincipalPaid, RemainingPrincipal
+  </p>
+
+  <div id="auth-section" style="display:none">
+    <p style="color:#991b1b">Not signed in. Please sign in to <a href="/my-tracker/">MyTracker</a> first, then come back here.</p>
+  </div>
+
+  <div id="migrate-section">
+    <div id="preview"></div>
+    <button class="primary" onclick="runMigration()">Run Migration</button>
+  </div>
+
+  <div id="log"></div>
+
+  <script>
+    const SHEET_ID = '1UGoYTp9q-OGSlY7fWYZpiPyo36KulHEh3V39qxa405c';
+    let token = null;
+
+    function log(msg, type = 'info') {
+      const el = document.getElementById('log');
+      el.innerHTML += `<div class="status ${type}">${msg}</div>`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    window.addEventListener('load', () => {
+      token = sessionStorage.getItem('auth_token');
+      if (token) {
+        document.getElementById('auth-section').style.display = 'none';
+        document.getElementById('migrate-section').style.display = 'block';
+        log('Using existing session token from MyTracker.', 'ok');
+        renderPreview();
+      } else {
+        document.getElementById('auth-section').style.display = 'block';
+        document.getElementById('migrate-section').style.display = 'none';
+      }
+    });
+
+    async function appendRows(range, values) {
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error?.message || `API error ${res.status}`);
+      }
+      return res.json();
+    }
+
+    // --- Loan math (mirrors src/utils/loanCalculations.js) ---
+    function presentValueOfAnnuity(emi, annualRate, remainingMonths) {
+      const r = annualRate / 12 / 100;
+      if (r === 0) return emi * remainingMonths;
+      return emi * (1 - Math.pow(1 + r, -remainingMonths)) / r;
+    }
+
+    function monthsBetween(fromDate, toDate) {
+      return Math.max(0, (toDate.getFullYear() - fromDate.getFullYear()) * 12 + (toDate.getMonth() - fromDate.getMonth()));
+    }
+
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+
+    // --- Known existing debts (from the current Debts tab) with their EMI details ---
+    // Legacy EMI loans: only EMI amount, rate, and target end date are known (not original principal/start).
+    // We back-solve the CURRENT outstanding principal from EMI + rate + remaining months to the end date,
+    // then model it as a fresh loan starting today with that principal and remaining tenure - this keeps
+    // future projections accurate even though pre-migration payment history isn't preserved.
+    const legacyEmiLoans = [
+      { name: 'Land Loan EMI', emi: 21000, annualRate: 14, endDate: new Date('2029-06-01'), debitsFrom: 'HDFC' },
+      { name: 'Personal Loan EMI', emi: 11000, annualRate: 10.5, endDate: new Date('2030-12-01'), debitsFrom: 'HDFC' },
+      { name: 'Wife Loan 1 EMI', emi: 46000, annualRate: 10.5, endDate: new Date('2028-10-01'), debitsFrom: 'W-HDFC' },
+      { name: 'Wife Loan 2 EMI', emi: 26000, annualRate: 10.5, endDate: new Date('2031-12-01'), debitsFrom: 'W-HDFC' },
+    ];
+
+    // Car loan: principal is already known (planned loan), so it's a straightforward fresh EMI entry.
+    const freshEmiLoans = [
+      { name: 'Car Loan', principal: 2230000, annualRate: 7.6, tenureMonths: 84, startDate: todayStr, debitsFrom: 'HDFC' },
+    ];
+
+    // Hand loans (simple interest / bullet repayment) - startDate approximated as today since the exact
+    // original date isn't tracked in the old Debts tab; edit it via the app afterward if you know the exact date.
+    const handLoans = [
+      { name: "Friend's Loan (0%)", principal: 300000, annualRate: 0, startDate: todayStr, direction: 'Owe', debitsFrom: 'CASH', notes: 'HIGH PRIORITY - honor commitment. Start paying after 1 year.' },
+      { name: 'Credit Card Bill', principal: 50000, annualRate: 0, startDate: todayStr, direction: 'Owe', debitsFrom: 'Axis' },
+      { name: 'Gold Loan', principal: 250000, annualRate: 9, startDate: todayStr, direction: 'Owe', debitsFrom: 'CASH', notes: 'Interest paid at yearly renewal, not monthly.' },
+      { name: 'Personal Loan (12%)', principal: 100000, annualRate: 12, startDate: todayStr, direction: 'Owe', debitsFrom: 'CASH', notes: 'Interest paid at closure/yearly, not monthly.' },
+      { name: 'Borrowed from Kullu', principal: 20000, annualRate: 0, startDate: todayStr, direction: 'Owe', debitsFrom: 'ICICI' },
+      { name: 'Mythiri', principal: 10000, annualRate: 0, startDate: todayStr, direction: 'Lent', debitsFrom: '', notes: 'By selling my iPhone. Target: Oct 2027.' },
+    ];
+
+    function computeLegacyEmiRow(loan) {
+      const remainingMonths = monthsBetween(today, loan.endDate);
+      const principal = presentValueOfAnnuity(loan.emi, loan.annualRate, remainingMonths);
+      return {
+        name: loan.name,
+        principal: Math.round(principal),
+        annualRate: loan.annualRate,
+        tenureMonths: remainingMonths,
+        startDate: todayStr,
+        debitsFrom: loan.debitsFrom,
+      };
+    }
+
+    function renderPreview() {
+      const rows = [
+        ...legacyEmiLoans.map(computeLegacyEmiRow),
+        ...freshEmiLoans,
+      ];
+      let html = '<h3>EMI Loans to be created</h3><table><tr><th>Name</th><th>Principal</th><th>Rate</th><th>Tenure (mo)</th></tr>';
+      rows.forEach(r => {
+        html += `<tr><td>${r.name}</td><td>${r.principal.toLocaleString('en-IN')}</td><td>${r.annualRate}%</td><td>${r.tenureMonths}</td></tr>`;
+      });
+      html += '</table>';
+
+      html += '<h3>Hand Loans to be created</h3><table><tr><th>Name</th><th>Amount</th><th>Rate</th><th>Direction</th></tr>';
+      handLoans.forEach(r => {
+        html += `<tr><td>${r.name}</td><td>${r.principal.toLocaleString('en-IN')}</td><td>${r.annualRate}%</td><td>${r.direction}</td></tr>`;
+      });
+      html += '</table>';
+      document.getElementById('preview').innerHTML = html;
+    }
+
+    async function runMigration() {
+      log('=== Starting migration ===', 'info');
+      try {
+        const emiRows = [
+          ...legacyEmiLoans.map(computeLegacyEmiRow),
+          ...freshEmiLoans,
+        ].map(r => [r.name, r.principal, r.annualRate, r.tenureMonths, r.startDate, r.debitsFrom, 'Active', '']);
+
+        await appendRows('EMILoans!A2:H', emiRows);
+        log(`EMI Loans: ${emiRows.length} loans migrated.`, 'ok');
+
+        const handRows = handLoans.map(r => [
+          r.name, r.principal, r.annualRate, r.startDate, r.direction, r.debitsFrom || '', 'Active', r.notes || '',
+        ]);
+        await appendRows('HandLoans!A2:H', handRows);
+        log(`Hand Loans: ${handRows.length} loans migrated.`, 'ok');
+
+        log('=== Migration complete! ===', 'ok');
+        log('Open MyTracker > Debts tab to review. Edit any loan to correct start dates once migrated.', 'info');
+      } catch (e) {
+        log(`Migration failed: ${e.message}`, 'err');
+      }
+    }
+  </script>
+</body>
+</html>
