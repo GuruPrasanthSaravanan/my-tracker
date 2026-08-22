@@ -139,9 +139,14 @@ export default function ObligationsPage() {
         // OUT of the account it came from; taking on a debt is Money IN.
         if (entry.logToCashBook && entry.debitsFrom) {
           const isLent = entry.direction === 'Lent';
+          // Type = DEBT-TAKEN (not the old shared 'DEBT') - so a new debt
+          // taken can be planned as its own Income category without
+          // netting against a same-month repayment (see
+          // bugs-and-lessons.md §43 for why the old shared 'DEBT' type
+          // made that impossible).
           await cashBook.addEntry({
             date: entry.startDate, description: `${entry.name} - ${isLent ? 'money lent' : 'loan taken'}`,
-            account: entry.debitsFrom, type: 'DEBT',
+            account: entry.debitsFrom, type: 'DEBT-TAKEN',
             moneyOut: isLent ? entry.principal : undefined,
             moneyIn: isLent ? undefined : entry.principal,
           });
@@ -169,9 +174,12 @@ export default function ObligationsPage() {
       await handLoans.addPayment(selectedHandLoan.name, amount, date);
       if (logToCashBook && cashBookAccount) {
         const isLent = selectedHandLoan.direction === 'Lent';
+        // Type = DEBT-REPAYMENT (not DEBT-TAKEN, see handleSaveHandLoan
+        // above) - a distinct category from taking on new debt, so the two
+        // can be planned/tracked independently instead of netting together.
         await cashBook.addEntry({
           date, description: `${selectedHandLoan.name} - payment ${isLent ? 'received' : 'made'}`,
-          account: cashBookAccount, type: 'DEBT',
+          account: cashBookAccount, type: 'DEBT-REPAYMENT',
           // A loan we lent money on: a payment coming back in is Money IN. A
           // loan we owe: a payment going out is Money OUT.
           moneyIn: isLent ? amount : undefined,
