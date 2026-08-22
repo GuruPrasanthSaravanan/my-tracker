@@ -22,14 +22,19 @@ import { formatCurrency } from '../utils/formatters';
 import { computeCashBookSpendForAccount } from '../utils/aggregations';
 import { Plus } from 'lucide-react';
 
+// "Obligations" rather than "Debts" - this page holds more than pure debt:
+// Money Lent is an asset (money owed to you), and Chit Funds are a hybrid
+// (savings-like before you win, debt-like only after) - see
+// bugs-and-lessons.md §21 for why it's named/organized this way.
 const SECTIONS = [
   { key: 'emi', label: 'EMI Loans' },
-  { key: 'hand', label: 'Hand Loans' },
+  { key: 'debt', label: 'Debts I Owe' },
+  { key: 'lent', label: 'Money Lent' },
   { key: 'card', label: 'Credit Cards' },
   { key: 'chit', label: 'Chit Funds' },
 ];
 
-export default function DebtsPage() {
+export default function ObligationsPage() {
   const { emiLoans, handLoans, creditCards, chitFunds, cashBook, lists } = useAppData();
   const accountOptions = lists.lists.accounts || [];
   const handleAddAccount = (value) => lists.addListItem('accounts', value);
@@ -45,7 +50,7 @@ export default function DebtsPage() {
   const [showPrepaymentForm, setShowPrepaymentForm] = useState(false);
   const [editingPrepayment, setEditingPrepayment] = useState(null);
 
-  // ----- Hand loan state -----
+  // ----- Hand loan state (shared by both the "Debts I Owe" and "Money Lent" tabs) -----
   const [showHandForm, setShowHandForm] = useState(null); // null | 'Owe' | 'Lent'
   const [selectedHandLoan, setSelectedHandLoan] = useState(null);
   const [editingHandLoan, setEditingHandLoan] = useState(false);
@@ -292,10 +297,10 @@ export default function DebtsPage() {
     <div>
       {/* Segmented Toggle */}
       <div className="sticky top-0 bg-gray-50 z-10 pb-3">
-        <div className="flex bg-gray-100 rounded-xl p-1">
+        <div className="flex bg-gray-100 rounded-xl p-1 overflow-x-auto">
           {SECTIONS.map((s) => (
             <button key={s.key} onClick={() => setSection(s.key)}
-              className={`flex-1 py-2 rounded-lg text-xs font-medium transition ${
+              className={`flex-1 py-2 px-1 rounded-lg text-xs font-medium transition whitespace-nowrap ${
                 section === s.key ? 'bg-white shadow-sm text-primary' : 'text-gray-500'
               }`}>
               {s.label}
@@ -335,57 +340,59 @@ export default function DebtsPage() {
         </div>
       )}
 
-      {/* ----- Hand Loans Section ----- */}
-      {section === 'hand' && (
+      {/* ----- Debts I Owe Section ----- */}
+      {section === 'debt' && (
         <div>
           <div className="bg-danger text-white rounded-2xl p-4 mb-3">
             <p className="text-xs opacity-80">Total Owed (Principal + Accrued Interest)</p>
             <p className="text-2xl font-bold">{formatCurrency(handLoans.totalOwed)}</p>
           </div>
 
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-semibold text-gray-500">Debts I Owe ({handLoans.debts.length})</h2>
-              <button onClick={() => setShowHandForm('Owe')} className="text-xs text-primary font-medium flex items-center gap-1">
-                <Plus size={14} /> Add Debt
-              </button>
-            </div>
-            {handLoans.isLoading ? (
-              <LoadingSkeleton rows={4} />
-            ) : handLoans.debts.length === 0 ? (
-              <p className="text-center text-gray-400 py-4">No hand loans tracked.</p>
-            ) : (
-              <div className="space-y-3">
-                {handLoans.debts.map((loan) => (
-                  <HandLoanRow key={loan._rowIndex} loan={loan} onClick={() => setSelectedHandLoan(loan)} />
-                ))}
-              </div>
-            )}
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-gray-500">Debts I Owe ({handLoans.debts.length})</h2>
+            <button onClick={() => setShowHandForm('Owe')} className="text-xs text-primary font-medium flex items-center gap-1">
+              <Plus size={14} /> Add Debt
+            </button>
           </div>
+          {handLoans.isLoading ? (
+            <LoadingSkeleton rows={4} />
+          ) : handLoans.debts.length === 0 ? (
+            <p className="text-center text-gray-400 py-8">No hand loans tracked.</p>
+          ) : (
+            <div className="space-y-3">
+              {handLoans.debts.map((loan) => (
+                <HandLoanRow key={loan._rowIndex} loan={loan} onClick={() => setSelectedHandLoan(loan)} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-semibold text-gray-500">Money I Lent ({handLoans.lends.length})</h2>
-              <button onClick={() => setShowHandForm('Lent')} className="text-xs text-primary font-medium flex items-center gap-1">
-                <Plus size={14} /> Add Lend
-              </button>
+      {/* ----- Money Lent Section ----- */}
+      {section === 'lent' && (
+        <div>
+          {handLoans.totalLent > 0 && (
+            <div className="bg-amber-50 rounded-2xl p-4 mb-3">
+              <p className="text-xs text-amber-700">Total Outstanding Lends</p>
+              <p className="text-2xl font-bold text-amber-600">{formatCurrency(handLoans.totalLent)}</p>
             </div>
-            {handLoans.totalLent > 0 && (
-              <div className="bg-amber-50 rounded-lg p-3 mb-2">
-                <p className="text-xs text-amber-700">Total Outstanding Lends</p>
-                <p className="text-lg font-bold text-amber-600">{formatCurrency(handLoans.totalLent)}</p>
-              </div>
-            )}
-            {handLoans.lends.length === 0 ? (
-              <p className="text-center text-gray-400 py-4">No money lent out.</p>
-            ) : (
-              <div className="space-y-3">
-                {handLoans.lends.map((loan) => (
-                  <HandLoanRow key={loan._rowIndex} loan={loan} onClick={() => setSelectedHandLoan(loan)} />
-                ))}
-              </div>
-            )}
+          )}
+
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-gray-500">Money I Lent ({handLoans.lends.length})</h2>
+            <button onClick={() => setShowHandForm('Lent')} className="text-xs text-primary font-medium flex items-center gap-1">
+              <Plus size={14} /> Add Lend
+            </button>
           </div>
+          {handLoans.lends.length === 0 ? (
+            <p className="text-center text-gray-400 py-8">No money lent out.</p>
+          ) : (
+            <div className="space-y-3">
+              {handLoans.lends.map((loan) => (
+                <HandLoanRow key={loan._rowIndex} loan={loan} onClick={() => setSelectedHandLoan(loan)} />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -500,7 +507,7 @@ export default function DebtsPage() {
         />
       )}
 
-      {/* ===== Hand Loan Modals ===== */}
+      {/* ===== Hand Loan Modals (shared by Debts I Owe + Money Lent) ===== */}
       {showHandForm && !editingHandLoan && (
         <HandLoanForm direction={showHandForm} onSave={handleSaveHandLoan} onClose={() => setShowHandForm(null)}
           accountOptions={accountOptions} onAddAccount={handleAddAccount} />

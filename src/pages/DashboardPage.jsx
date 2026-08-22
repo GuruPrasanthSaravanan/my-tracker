@@ -78,10 +78,10 @@ export default function DashboardPage() {
       .map((m) => ({ type: 'Milestone', label: `${m.milestone} (${m.project})`, date: m.plannedDate, to: '/projects' })),
     ...emiLoans.loans
       .filter((l) => l.status !== 'Closed' && l.emiStatus?.nextDueDate)
-      .map((l) => ({ type: 'EMI', label: `${l.name} EMI (${formatCurrency(l.emiStatus.emi)})`, date: l.emiStatus.nextDueDate, to: '/debts' })),
+      .map((l) => ({ type: 'EMI', label: `${l.name} EMI (${formatCurrency(l.emiStatus.emi)})`, date: l.emiStatus.nextDueDate, to: '/obligations' })),
     ...creditCards.cards
       .filter((c) => c.latestBill && !c.isPaidInFull)
-      .map((c) => ({ type: 'Credit Card', label: `${c.name} bill (${formatCurrency(c.outstanding)})`, date: c.latestBill.dueDate, to: '/debts' })),
+      .map((c) => ({ type: 'Credit Card', label: `${c.name} bill (${formatCurrency(c.outstanding)})`, date: c.latestBill.dueDate, to: '/obligations' })),
   ]
     .filter((item) => item.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -94,7 +94,7 @@ export default function DashboardPage() {
     { label: 'Add CashBook Entry', icon: Plus, onClick: () => navigate('/cashbook', { state: { openForm: true } }) },
     { label: 'Transfer Between Accounts', icon: ArrowLeftRight, onClick: () => navigate('/cashbook', { state: { openTransfer: true } }) },
     { label: 'Add Vendor Entry', icon: Plus, onClick: () => navigate('/vendors', { state: { openForm: true } }) },
-    { label: 'Record Debt Payment', icon: ArrowRight, onClick: () => navigate('/debts') },
+    { label: 'Record Debt Payment', icon: ArrowRight, onClick: () => navigate('/obligations') },
   ];
 
   return (

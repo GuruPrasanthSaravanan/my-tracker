@@ -6,7 +6,7 @@ const tabs = [
   { to: '/cashbook', icon: BookOpen, label: 'CashBook' },
   { to: '/vendors', icon: Users, label: 'Vendors' },
   { to: '/monthly', icon: CalendarRange, label: 'Monthly' },
-  { to: '/debts', icon: CreditCard, label: 'Debts' },
+  { to: '/obligations', icon: CreditCard, label: 'Obligations' },
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
 ];
 

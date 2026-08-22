@@ -5,7 +5,7 @@ import BottomNav from './BottomNav';
 import CashBookPage from '../pages/CashBookPage';
 import VendorsPage from '../pages/VendorsPage';
 import ProjectsPage from '../pages/ProjectsPage';
-import DebtsPage from '../pages/DebtsPage';
+import ObligationsPage from '../pages/ObligationsPage';
 import DashboardPage from '../pages/DashboardPage';
 import MonthlyPage from '../pages/MonthlyPage';
 import NetWorthPage from '../pages/NetWorthPage';
@@ -30,7 +30,7 @@ export default function Layout() {
             <Route path="/cashbook" element={<CashBookPage />} />
             <Route path="/vendors" element={<VendorsPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
-            <Route path="/debts" element={<DebtsPage />} />
+            <Route path="/obligations" element={<ObligationsPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/monthly" element={<MonthlyPage />} />
             <Route path="/networth" element={<NetWorthPage />} />
