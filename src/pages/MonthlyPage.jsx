@@ -366,6 +366,18 @@ export default function MonthlyPage() {
   const actualOutflow = outflowPlans.reduce((sum, p) => sum + Math.abs(actualForPlan(p)), 0);
   const actualSavings = actualIncome - actualOutflow;
 
+  // Total Available = whatever's actually sitting in your accounts right
+  // now (live, not month-scoped - the same figure as CashBook's "Total
+  // Balance") plus this month's Savings - i.e. "how much could I commit to
+  // a repayment or project today, plus what this month is expected to free
+  // up." Deliberately uses the live running balance rather than trying to
+  // reconstruct "last month's leftover" as a separate carried-forward
+  // figure - the running balance already *is* every prior month's leftover,
+  // with no risk of it drifting out of sync with a separately-tracked number.
+  const currentBalance = cashBook.totalBalance;
+  const totalAvailablePlanned = currentBalance + plannedSavings;
+  const totalAvailableActual = currentBalance + actualSavings;
+
   // Actual spending breakdown pie chart - top level is either Type (e.g.
   // tap "WANTS" to see Dining vs Shopping vs Entertainment) or Account
   // (e.g. tap "W-HDFC" to see which Types its spend went to), and a Type
@@ -561,6 +573,13 @@ export default function MonthlyPage() {
         <p className="text-xs opacity-80 mt-1">
           Actual so far: {formatCurrency(actualSavings)} ({formatCurrency(actualIncome)} in − {formatCurrency(actualOutflow)} out)
         </p>
+        <div className="border-t border-white/20 mt-3 pt-3">
+          <p className="text-xs opacity-80">Total Available for a repayment/project (Current Balance + Planned Savings)</p>
+          <p className="text-xl font-bold">{formatCurrency(totalAvailablePlanned)}</p>
+          <p className="text-xs opacity-80 mt-1">
+            Current Balance: {formatCurrency(currentBalance)} · Available now (using Actual so far): {formatCurrency(totalAvailableActual)}
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-4">
