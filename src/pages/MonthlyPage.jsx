@@ -4,9 +4,10 @@ import {
   computeMonthlyActuals, computeActualForPlan, computeActualForTransferPlan,
   computeTypeSpendBreakdown, computeSubCategorySpendBreakdown, computePlannedBreakdown,
   computeAccountSpendBreakdown, computeTypeSpendBreakdownForAccount, computeAccountSpendBreakdownForType,
-  findNearMissForZeroActual,
+  findNearMissForZeroActual, computeCombinedProjectSpend,
 } from '../utils/aggregations';
-import { formatCurrency, getTodayISO, shiftMonth, monthLabel } from '../utils/formatters';
+import { projectPayoffPlan } from '../utils/debtAvalancheProjection';
+import { formatCurrency, formatDate, getTodayISO, shiftMonth, monthLabel } from '../utils/formatters';
 import Dropdown from '../components/Dropdown';
 import PieChart from '../components/PieChart';
 import BarChart from '../components/BarChart';
@@ -292,7 +293,7 @@ function LoadTemplateModal({ template, monthPlans, onLoad, onClose }) {
 }
 
 export default function MonthlyPage() {
-  const { monthly, cashBook, lists } = useAppData();
+  const { monthly, cashBook, lists, handLoans, emiLoans, projects, vendors } = useAppData();
   const [month, setMonth] = useState(getTodayISO().slice(0, 7));
   const [showForm, setShowForm] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null);
@@ -377,6 +378,45 @@ export default function MonthlyPage() {
   const currentBalance = cashBook.totalBalance;
   const totalAvailablePlanned = currentBalance + plannedSavings;
   const totalAvailableActual = currentBalance + actualSavings;
+
+  // Debt Payoff Trajectory - only items with a Payoff Priority set
+  // participate (see debtAvalancheProjection.js / bugs-and-lessons.md §44).
+  // Lend-direction Hand Loans are excluded here (not the engine's job) -
+  // this projection is about paying down obligations/funding commitments,
+  // not chasing repayment of money lent out.
+  const payoffHandLoans = handLoans.debts
+    .filter((l) => l.status !== 'Closed' && l.payoffPriority != null)
+    .map((l) => {
+      const state = handLoans.getLoanState(l);
+      return {
+        name: l.name, priority: l.payoffPriority,
+        outstandingPrincipal: state.outstandingPrincipal,
+        accruedInterestSoFar: state.accruedInterest,
+        annualRate: l.annualRate,
+      };
+    });
+  const payoffEMILoans = emiLoans.loans
+    .filter((l) => l.status !== 'Closed' && !l.emiStatus?.isComplete && l.payoffPriority != null)
+    .map((l) => ({
+      name: l.name, priority: l.payoffPriority,
+      outstandingBalance: l.emiStatus?.outstandingBalance ?? l.principal,
+      annualRate: l.annualRate, emi: l.emiStatus?.emi ?? 0,
+      remainingMonths: l.emiStatus?.installmentsRemaining ?? 0,
+    }));
+  const payoffProjects = projects.projects
+    .filter((p) => p.status !== 'Completed' && !p.endDateActual && p.payoffPriority != null)
+    .map((p) => ({
+      name: p.name || p.code, priority: p.payoffPriority,
+      remainingBudget: Math.max(0, p.budget - computeCombinedProjectSpend(vendors.rows, cashBook.rows, p.code)),
+      endDatePlanned: p.endDatePlanned || null,
+    }));
+  const hasPayoffItems = payoffHandLoans.length > 0 || payoffEMILoans.length > 0 || payoffProjects.length > 0;
+  const payoffPlan = hasPayoffItems
+    ? projectPayoffPlan({
+        handLoans: payoffHandLoans, emiLoans: payoffEMILoans, projects: payoffProjects,
+        monthlySurplus: Math.max(0, plannedSavings), startDate: getTodayISO(),
+      })
+    : null;
 
   // Actual spending breakdown pie chart - top level is either Type (e.g.
   // tap "WANTS" to see Dining vs Shopping vs Entertainment) or Account
@@ -581,6 +621,54 @@ export default function MonthlyPage() {
           </p>
         </div>
       </div>
+
+      {/* Debt Payoff Trajectory - only shown once at least one Hand Loan,
+          EMI Loan, or Project has an explicit Payoff Priority set (see
+          bugs-and-lessons.md §44). Simulates month by month using this
+          month's Planned Savings as a flat recurring surplus. */}
+      {hasPayoffItems && payoffPlan && (
+        <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
+          <h2 className="text-sm font-semibold text-gray-500 mb-1">Debt Payoff Trajectory</h2>
+          <p className="text-xs text-gray-400 mb-3">
+            Assumes {formatCurrency(Math.max(0, plannedSavings))}/month (this month's Planned Savings) stays constant.
+          </p>
+
+          {payoffPlan.neverCompletes ? (
+            <p className="text-sm text-danger">Does not clear within {payoffPlan.months.length} months at this pace.</p>
+          ) : (
+            <div className="space-y-1 mb-3">
+              {payoffPlan.milestones
+                .slice()
+                .sort((a, b) => a.clearedMonth - b.clearedMonth)
+                .map((m) => (
+                  <p key={m.itemName} className="text-sm text-gray-700">
+                    <span className="font-medium text-gray-900">{m.itemName}</span> clears: Month {m.clearedMonth} ({formatDate(m.clearedDate)})
+                  </p>
+                ))}
+              <p className="text-sm font-semibold text-success">
+                All cleared: Month {payoffPlan.allClearMonth} ({formatDate(payoffPlan.months[payoffPlan.allClearMonth - 1].date)})
+              </p>
+            </div>
+          )}
+
+          <details className="mt-2">
+            <summary className="text-xs text-primary font-medium cursor-pointer">Show full month-by-month table</summary>
+            <div className="mt-2 max-h-80 overflow-y-auto space-y-3">
+              {payoffPlan.months.map((month, i) => (
+                <div key={i} className="border-b border-gray-100 pb-2">
+                  <p className="text-xs font-semibold text-gray-500">Month {i + 1} - {formatDate(month.date)}</p>
+                  {Object.entries(month.extraPaymentApplied).map(([name, amt]) => (
+                    <p key={name} className="text-xs text-gray-600 flex justify-between">
+                      <span>{name}: +{formatCurrency(amt)} applied</span>
+                      <span>{formatCurrency(month.remaining[name] || 0)} left</span>
+                    </p>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </details>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-3 mb-4">
         <div className="bg-white rounded-2xl p-4 shadow-sm">
