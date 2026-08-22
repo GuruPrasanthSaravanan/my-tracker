@@ -25,4 +25,6 @@ export const SHEET_SCHEMAS = {
   NetWorthSnapshots: ['Date', 'AssetsTotal', 'LiabilitiesTotal', 'Notes'],
   AccountTypeFavorites: ['Account', 'Type'],
   SubCategories: ['Type', 'SubCategory'],
+  ChitFunds: ['Name', 'TotalValue', 'MonthlyContribution', 'DurationMonths', 'StartDate', 'ForemanCommissionPercent', 'DebitsFrom', 'Status', 'Notes'],
+  ChitFundMonths: ['ChitName', 'Month', 'ContributionPaid', 'DividendReceived', 'IsPrizedMonth', 'PrizeAmountReceived', 'Notes'],
 };

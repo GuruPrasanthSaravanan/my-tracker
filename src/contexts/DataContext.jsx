@@ -14,6 +14,7 @@ import { useMonthly } from '../hooks/useMonthly';
 import { useNetWorth } from '../hooks/useNetWorth';
 import { useAccountTypeFavorites } from '../hooks/useAccountTypeFavorites';
 import { useSubCategories } from '../hooks/useSubCategories';
+import { useChitFunds } from '../hooks/useChitFunds';
 
 const DataContext = createContext(null);
 
@@ -43,6 +44,7 @@ export function DataProvider({ children }) {
   const netWorth = useNetWorth();
   const accountTypeFavorites = useAccountTypeFavorites();
   const subCategories = useSubCategories();
+  const chitFunds = useChitFunds();
 
   // Auto-provision any tab this app needs that doesn't exist yet (e.g. a brand
   // new tab introduced in this release, like MonthlyPlans/NetWorthSnapshots) -
@@ -64,7 +66,7 @@ export function DataProvider({ children }) {
   return (
     <DataContext.Provider value={{
       cashBook, vendors, projects, emiLoans, handLoans, creditCards, lists, accountSettings,
-      monthly, netWorth, accountTypeFavorites, subCategories,
+      monthly, netWorth, accountTypeFavorites, subCategories, chitFunds,
     }}>
       {children}
     </DataContext.Provider>

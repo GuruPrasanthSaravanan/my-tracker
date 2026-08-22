@@ -12,6 +12,10 @@ import CreditCardCard from '../components/CreditCardCard';
 import CreditCardForm from '../components/CreditCardForm';
 import CreditCardDetail from '../components/CreditCardDetail';
 import CreditCardBillForm from '../components/CreditCardBillForm';
+import ChitFundCard from '../components/ChitFundCard';
+import ChitFundForm from '../components/ChitFundForm';
+import ChitFundDetail from '../components/ChitFundDetail';
+import ChitFundMonthForm from '../components/ChitFundMonthForm';
 import Toast from '../components/Toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import { formatCurrency } from '../utils/formatters';
@@ -22,10 +26,11 @@ const SECTIONS = [
   { key: 'emi', label: 'EMI Loans' },
   { key: 'hand', label: 'Hand Loans' },
   { key: 'card', label: 'Credit Cards' },
+  { key: 'chit', label: 'Chit Funds' },
 ];
 
 export default function DebtsPage() {
-  const { emiLoans, handLoans, creditCards, cashBook, lists } = useAppData();
+  const { emiLoans, handLoans, creditCards, chitFunds, cashBook, lists } = useAppData();
   const accountOptions = lists.lists.accounts || [];
   const handleAddAccount = (value) => lists.addListItem('accounts', value);
   const [section, setSection] = useState('emi');
@@ -54,6 +59,13 @@ export default function DebtsPage() {
   const [showBillForm, setShowBillForm] = useState(false);
   const [editingBill, setEditingBill] = useState(null);
   const [billPrefillAmount, setBillPrefillAmount] = useState(null);
+
+  // ----- Chit fund state -----
+  const [showChitForm, setShowChitForm] = useState(false);
+  const [selectedChit, setSelectedChit] = useState(null);
+  const [editingChit, setEditingChit] = useState(false);
+  const [showChitMonthForm, setShowChitMonthForm] = useState(false);
+  const [editingChitMonth, setEditingChitMonth] = useState(null);
 
   // ===== EMI handlers =====
   const handleSaveEMI = async (entry) => {
@@ -229,6 +241,53 @@ export default function DebtsPage() {
     setShowBillForm(true);
   };
 
+  // ===== Chit fund handlers =====
+  const handleSaveChit = async (entry) => {
+    try {
+      if (editingChit && selectedChit) {
+        await chitFunds.editChit(selectedChit._rowIndex, entry);
+      } else {
+        await chitFunds.addChit(entry);
+      }
+      setShowChitForm(false);
+      setEditingChit(false);
+      setSelectedChit(null);
+      notify('Chit fund saved!');
+    } catch { onErr(); }
+  };
+
+  const handleDeleteChit = async () => {
+    try {
+      await chitFunds.deleteChit(selectedChit._rowIndex);
+      setShowChitForm(false);
+      setEditingChit(false);
+      setSelectedChit(null);
+      notify('Chit fund deleted.');
+    } catch { onErr(); }
+  };
+
+  const handleSaveChitMonth = async (entry) => {
+    try {
+      if (editingChitMonth) {
+        await chitFunds.editMonth(editingChitMonth._rowIndex, entry);
+      } else {
+        await chitFunds.addMonth(entry);
+      }
+      setShowChitMonthForm(false);
+      setEditingChitMonth(null);
+      notify('Month logged!');
+    } catch { onErr(); }
+  };
+
+  const handleDeleteChitMonth = async () => {
+    try {
+      await chitFunds.deleteMonth(editingChitMonth._rowIndex);
+      setShowChitMonthForm(false);
+      setEditingChitMonth(null);
+      notify('Month entry deleted.');
+    } catch { onErr(); }
+  };
+
   return (
     <div>
       {/* Segmented Toggle */}
@@ -354,6 +413,36 @@ export default function DebtsPage() {
             <div className="space-y-3">
               {creditCards.cards.map((card) => (
                 <CreditCardCard key={card._rowIndex} card={card} onClick={() => setSelectedCard(card)} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ----- Chit Funds Section ----- */}
+      {section === 'chit' && (
+        <div>
+          <div className="bg-primary text-white rounded-2xl p-4 mb-3">
+            <p className="text-xs opacity-80">Monthly Commitment (Active Chits)</p>
+            <p className="text-2xl font-bold">{formatCurrency(chitFunds.totalMonthlyCommitment)}</p>
+          </div>
+
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-gray-500">Chit Funds ({chitFunds.chits.length})</h2>
+            <button onClick={() => { setEditingChit(false); setSelectedChit(null); setShowChitForm(true); }}
+              className="text-xs text-primary font-medium flex items-center gap-1">
+              <Plus size={14} /> Add Chit Fund
+            </button>
+          </div>
+
+          {chitFunds.isLoading ? (
+            <LoadingSkeleton rows={4} />
+          ) : chitFunds.chits.length === 0 ? (
+            <p className="text-center text-gray-400 py-8">No chit funds yet. Tap "Add Chit Fund" to add one.</p>
+          ) : (
+            <div className="space-y-3">
+              {chitFunds.chits.map((chit) => (
+                <ChitFundCard key={chit._rowIndex} chit={chit} onClick={() => setSelectedChit(chit)} />
               ))}
             </div>
           )}
@@ -514,6 +603,53 @@ export default function DebtsPage() {
           onSave={handleSaveBill}
           onDelete={editingBill ? handleDeleteBill : undefined}
           onClose={() => { setShowBillForm(false); setEditingBill(null); setBillPrefillAmount(null); }}
+        />
+      )}
+
+      {/* ===== Chit Fund Modals ===== */}
+      {showChitForm && !editingChit && (
+        <ChitFundForm onSave={handleSaveChit} onClose={() => setShowChitForm(false)}
+          accountOptions={accountOptions} onAddAccount={handleAddAccount} />
+      )}
+
+      {selectedChit && !editingChit && !showChitMonthForm && (
+        <ChitFundDetail
+          chit={selectedChit}
+          onEdit={() => setEditingChit(true)}
+          onAddMonth={() => { setEditingChitMonth(null); setShowChitMonthForm(true); }}
+          onEditMonth={(m) => { setEditingChitMonth(m); setShowChitMonthForm(true); }}
+          onClose={() => setSelectedChit(null)}
+        />
+      )}
+
+      {selectedChit && editingChit && (
+        <ChitFundForm
+          initial={{
+            name: selectedChit.name,
+            totalValue: String(selectedChit.totalValue),
+            monthlyContribution: String(selectedChit.monthlyContribution),
+            durationMonths: String(selectedChit.durationMonths),
+            startDate: selectedChit.startDate,
+            foremanCommissionPercent: String(selectedChit.foremanCommissionPercent),
+            debitsFrom: selectedChit.debitsFrom,
+            status: selectedChit.status,
+            notes: selectedChit.notes,
+          }}
+          onSave={handleSaveChit}
+          onDelete={handleDeleteChit}
+          accountOptions={accountOptions} onAddAccount={handleAddAccount}
+          onClose={() => { setEditingChit(false); setSelectedChit(null); }}
+        />
+      )}
+
+      {selectedChit && showChitMonthForm && (
+        <ChitFundMonthForm
+          chit={selectedChit}
+          initial={editingChitMonth}
+          isEditing={!!editingChitMonth}
+          onSave={handleSaveChitMonth}
+          onDelete={editingChitMonth ? handleDeleteChitMonth : undefined}
+          onClose={() => { setShowChitMonthForm(false); setEditingChitMonth(null); }}
         />
       )}
 
