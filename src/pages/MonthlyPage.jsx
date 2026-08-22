@@ -6,7 +6,7 @@ import Dropdown from '../components/Dropdown';
 import PieChart from '../components/PieChart';
 import Toast from '../components/Toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
-import { ChevronLeft, ChevronRight, Plus, X, Trash2, Settings2, ArrowLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, Settings2, ArrowLeft, Download } from 'lucide-react';
 
 const SECTIONS = ['Income', 'My Outflows', 'Wife Outflows', 'Projects'];
 
@@ -194,12 +194,90 @@ function TemplateManager({ template, categoryOptions, onAddCategory, accountOpti
   );
 }
 
+/**
+ * Lets the user pick one or more specific template items to pull into the
+ * current month, instead of the old all-or-nothing "Load Default Template"
+ * button - which also only ever appeared before the month had any plans at
+ * all, so there was no way to top up a month with more template items later.
+ * Template items whose category+account combo already exists as a plan
+ * this month are hidden (nothing to add), and defaults to everything else
+ * selected, since "pull the whole template" is still the common case.
+ */
+function LoadTemplateModal({ template, monthPlans, onLoad, onClose }) {
+  const alreadyPlanned = new Set(monthPlans.map((p) => `${p.category}|${p.account || ''}`));
+  const availableItems = template.filter((t) => !alreadyPlanned.has(`${t.category}|${t.account || ''}`));
+  const [selected, setSelected] = useState(new Set(availableItems.map((t) => t._rowIndex)));
+  const [isLoading, setIsLoading] = useState(false);
+
+  const toggle = (rowIndex) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(rowIndex)) next.delete(rowIndex); else next.add(rowIndex);
+      return next;
+    });
+  };
+
+  const allSelected = selected.size === availableItems.length && availableItems.length > 0;
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(availableItems.map((t) => t._rowIndex)));
+
+  const handleLoad = async () => {
+    if (isLoading || selected.size === 0) return;
+    setIsLoading(true);
+    try {
+      await onLoad(availableItems.filter((t) => selected.has(t._rowIndex)));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-end">
+      <div className="bg-white w-full rounded-t-2xl p-4 pb-8 max-h-[80vh] overflow-auto">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold">Load from Template</h2>
+          <button onClick={onClose} disabled={isLoading} className="p-1"><X size={20} /></button>
+        </div>
+
+        {availableItems.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-6">
+            Every template category is already planned for this month.
+          </p>
+        ) : (
+          <>
+            <button onClick={toggleAll} className="text-xs text-primary font-medium mb-2">
+              {allSelected ? 'Deselect all' : 'Select all'}
+            </button>
+            <div className="bg-gray-50 rounded-xl overflow-hidden mb-4">
+              {availableItems.map((t) => (
+                <label key={t._rowIndex}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 border-b border-gray-200 last:border-0">
+                  <input type="checkbox" checked={selected.has(t._rowIndex)} onChange={() => toggle(t._rowIndex)} />
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-900">{t.category}</p>
+                    <p className="text-xs text-gray-400">{t.section}{t.account ? ` \u00b7 ${t.account}` : ''}</p>
+                  </div>
+                  <span className="text-sm text-gray-500">{formatCurrency(t.defaultPlannedAmount)}</span>
+                </label>
+              ))}
+            </div>
+            <button onClick={handleLoad} disabled={isLoading || selected.size === 0}
+              className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-lg disabled:opacity-60">
+              {isLoading ? 'Adding...' : `Add ${selected.size} Selected`}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function MonthlyPage() {
   const { monthly, cashBook, lists } = useAppData();
   const [month, setMonth] = useState(getTodayISO().slice(0, 7));
   const [showForm, setShowForm] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null);
   const [showTemplate, setShowTemplate] = useState(false);
+  const [showLoadTemplate, setShowLoadTemplate] = useState(false);
   const [drillIntoType, setDrillIntoType] = useState(null);
   const [toast, setToast] = useState(null);
   const notify = (message, type = 'success') => setToast({ message, type });
@@ -278,6 +356,16 @@ export default function MonthlyPage() {
     }
   };
 
+  const handleLoadSelectedTemplateItems = async (items) => {
+    try {
+      await monthly.loadTemplateIntoMonth(month, items);
+      setShowLoadTemplate(false);
+      notify(`Added ${items.length} categor${items.length === 1 ? 'y' : 'ies'} from template!`);
+    } catch {
+      notify('Failed to load template items.', 'error');
+    }
+  };
+
   const handleSaveTemplateItem = async (existing, entry) => {
     try {
       if (existing) {
@@ -352,9 +440,14 @@ export default function MonthlyPage() {
         </button>
       )}
 
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
         <h2 className="text-sm font-semibold text-gray-500">Categories ({monthPlans.length})</h2>
         <div className="flex items-center gap-3">
+          {monthly.template.length > 0 && (
+            <button onClick={() => setShowLoadTemplate(true)} className="text-xs text-gray-500 font-medium flex items-center gap-1">
+              <Download size={14} /> From Template
+            </button>
+          )}
           <button onClick={() => setShowTemplate(true)} className="text-xs text-gray-500 font-medium flex items-center gap-1">
             <Settings2 size={14} /> Template
           </button>
@@ -427,6 +520,15 @@ export default function MonthlyPage() {
           onSave={handleSaveTemplateItem}
           onDelete={handleDeleteTemplateItem}
           onClose={() => setShowTemplate(false)}
+        />
+      )}
+
+      {showLoadTemplate && (
+        <LoadTemplateModal
+          template={monthly.template}
+          monthPlans={monthPlans}
+          onLoad={handleLoadSelectedTemplateItems}
+          onClose={() => setShowLoadTemplate(false)}
         />
       )}
 

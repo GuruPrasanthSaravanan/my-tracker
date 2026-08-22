@@ -108,10 +108,17 @@ export function useMonthly() {
     await fetchData();
   }, [token, fetchData]);
 
-  /** Applies the saved template to a month, e.g. for a brand new month that has no plans yet. */
-  const loadTemplateIntoMonth = useCallback(async (month) => {
+  /**
+   * Applies the saved template to a month - either the whole template (e.g.
+   * for a brand new month with no plans yet), or a specific hand-picked
+   * subset of template items (`items`), so template items can also be
+   * pulled in one/a few at a time into a month that already has some plans,
+   * instead of being all-or-nothing.
+   */
+  const loadTemplateIntoMonth = useCallback(async (month, items) => {
+    const templateItems = items || parsedTemplate;
     let nextRowCount = rows.length;
-    for (const t of parsedTemplate) {
+    for (const t of templateItems) {
       await appendRowAt(token, 'MonthlyPlans', 'E', nextRowCount, [month, t.category, t.defaultPlannedAmount, t.section, t.account]);
       nextRowCount++;
     }
