@@ -5,7 +5,7 @@ import {
   computeMonthlyActuals, computeActualForPlan, computeActualForTransferPlan, computeMonthSurplus,
   hasEMIBeenLoggedForMonth, computeUpcomingEMIFundingWarnings,
   computeTypeFrequencyForAccount, orderTypeOptionsForAccount, computeTypeSpendBreakdown, computeSubCategorySpendBreakdown,
-  computePlannedBreakdown,
+  computePlannedBreakdown, computeAccountSpendBreakdown, computeTypeSpendBreakdownForAccount, computeAccountSpendBreakdownForType,
 } from '../../src/utils/aggregations';
 
 describe('sumByField', () => {
@@ -431,6 +431,38 @@ describe('computeSubCategorySpendBreakdown', () => {
     expect(breakdown.get('Entertainment')).toBe(1000);
     expect(breakdown.get('(uncategorized)')).toBe(500);
     expect(breakdown.has('EMI')).toBe(false);
+  });
+});
+
+describe('computeAccountSpendBreakdown / computeTypeSpendBreakdownForAccount / computeAccountSpendBreakdownForType', () => {
+  const rows = [
+    ['2026-09-01', 'Salary', 'ICICI', 'SALARY', '153000', ''],
+    ['2026-09-05', 'EMI', 'HDFC', 'EMI', '', '21000'],
+    ['2026-09-06', 'Groceries', 'HDFC', 'FAMILY', '', '3000'],
+    ['2026-09-07', 'Movie', 'ICICI', 'WANTS', '', '1000'],
+    ['2026-10-01', 'Next month EMI', 'HDFC', 'EMI', '', '21000'],
+  ];
+
+  it('computeAccountSpendBreakdown sums Money OUT per Account for a month, ignoring Money IN', () => {
+    const breakdown = computeAccountSpendBreakdown(rows, '2026-09');
+    expect(breakdown.get('HDFC')).toBe(24000); // EMI 21000 + FAMILY 3000
+    expect(breakdown.get('ICICI')).toBe(1000); // WANTS only - SALARY is Money IN
+    expect(breakdown.get('ICICI')).not.toBe(154000);
+  });
+
+  it('computeTypeSpendBreakdownForAccount sums Money OUT per Type within one Account+month', () => {
+    const breakdown = computeTypeSpendBreakdownForAccount(rows, '2026-09', 'HDFC');
+    expect(breakdown.get('EMI')).toBe(21000);
+    expect(breakdown.get('FAMILY')).toBe(3000);
+    expect(breakdown.has('WANTS')).toBe(false); // that was ICICI, not HDFC
+  });
+
+  it('computeAccountSpendBreakdownForType sums Money OUT per Account within one Type+month', () => {
+    const breakdown = computeAccountSpendBreakdownForType(rows, '2026-09', 'EMI');
+    expect(breakdown.get('HDFC')).toBe(21000);
+    expect(breakdown.has('ICICI')).toBe(false);
+    // October's EMI on HDFC must not leak into September's breakdown
+    expect(breakdown.get('HDFC')).not.toBe(42000);
   });
 });
 

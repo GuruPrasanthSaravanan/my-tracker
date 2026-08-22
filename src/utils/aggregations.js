@@ -394,6 +394,74 @@ export function computeSubCategorySpendBreakdown(rows, month, type) {
 }
 
 /**
+ * Account spending breakdown (Money OUT only) for a given month - the
+ * Actual Breakdown pie chart's alternate top-level grouping (Account
+ * instead of Type), so "which accounts did the month's spend come out of"
+ * can be answered directly instead of only "which categories".
+ * @param {string[][]} rows - CashBook rows [..., Account(2), Type(3), IN(4), OUT(5)]
+ * @param {string} month - "YYYY-MM"
+ * @returns {Map<string, number>} Account -> total Money OUT for that month
+ */
+export function computeAccountSpendBreakdown(rows, month) {
+  const result = new Map();
+  for (const row of rows) {
+    if (!(row[0] || '').startsWith(month)) continue;
+    const moneyOut = parseFloat(row[5]) || 0;
+    if (moneyOut <= 0) continue;
+    const account = row[2] || '(none)';
+    result.set(account, (result.get(account) || 0) + moneyOut);
+  }
+  return result;
+}
+
+/**
+ * Type spending breakdown (Money OUT only) within one Account, for a given
+ * month - the drill-down view when the Actual Breakdown pie is grouped by
+ * Account (see computeAccountSpendBreakdown): tapping an account slice
+ * (e.g. "W-HDFC") shows which Types made up that account's spend.
+ * @param {string[][]} rows - CashBook rows [..., Account(2), Type(3), IN(4), OUT(5)]
+ * @param {string} month - "YYYY-MM"
+ * @param {string} account - the Account to drill into
+ * @returns {Map<string, number>} Type -> total Money OUT for that account+month
+ */
+export function computeTypeSpendBreakdownForAccount(rows, month, account) {
+  const result = new Map();
+  for (const row of rows) {
+    if (!(row[0] || '').startsWith(month)) continue;
+    if ((row[2] || '') !== account) continue;
+    const moneyOut = parseFloat(row[5]) || 0;
+    if (moneyOut <= 0) continue;
+    const type = row[3] || '(none)';
+    result.set(type, (result.get(type) || 0) + moneyOut);
+  }
+  return result;
+}
+
+/**
+ * Account spending breakdown (Money OUT only) within one Type, for a given
+ * month - an alternate drill-down for the Type-grouped Actual Breakdown pie,
+ * alongside the existing Sub-category drill-down (computeSubCategorySpendBreakdown).
+ * Lets "which account did this category's spend come out of" be answered
+ * without switching the whole chart to Account-grouped mode.
+ * @param {string[][]} rows - CashBook rows [..., Account(2), Type(3), IN(4), OUT(5)]
+ * @param {string} month - "YYYY-MM"
+ * @param {string} type - the Type to drill into
+ * @returns {Map<string, number>} Account -> total Money OUT for that type+month
+ */
+export function computeAccountSpendBreakdownForType(rows, month, type) {
+  const result = new Map();
+  for (const row of rows) {
+    if (!(row[0] || '').startsWith(month)) continue;
+    if ((row[3] || '') !== type) continue;
+    const moneyOut = parseFloat(row[5]) || 0;
+    if (moneyOut <= 0) continue;
+    const account = row[2] || '(none)';
+    result.set(account, (result.get(account) || 0) + moneyOut);
+  }
+  return result;
+}
+
+/**
  * Category-level Planned breakdown for a month, for the Monthly page's
  * "Planned" pie chart (a companion to computeTypeSpendBreakdown's "Actual"
  * pie) - sums PlannedAmount by Category. Unlike the Actual breakdown, this

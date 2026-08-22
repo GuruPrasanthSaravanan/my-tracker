@@ -132,6 +132,20 @@ export default function ObligationsPage() {
         await handLoans.editLoan(selectedHandLoan._rowIndex, entry);
       } else {
         await handLoans.addLoan(entry);
+        // A new Lend/Debt only updates that loan's own tab - it doesn't
+        // touch CashBook, so without this the money leaving/entering an
+        // account here would silently drift from that account's real
+        // balance until manually re-entered. Lending money out is Money
+        // OUT of the account it came from; taking on a debt is Money IN.
+        if (entry.logToCashBook && entry.debitsFrom) {
+          const isLent = entry.direction === 'Lent';
+          await cashBook.addEntry({
+            date: entry.startDate, description: `${entry.name} - ${isLent ? 'money lent' : 'loan taken'}`,
+            account: entry.debitsFrom, type: 'DEBT',
+            moneyOut: isLent ? entry.principal : undefined,
+            moneyIn: isLent ? undefined : entry.principal,
+          });
+        }
       }
       setShowHandForm(null);
       setEditingHandLoan(false);

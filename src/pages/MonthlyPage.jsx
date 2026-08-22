@@ -3,6 +3,7 @@ import { useAppData } from '../contexts/DataContext';
 import {
   computeMonthlyActuals, computeActualForPlan, computeActualForTransferPlan,
   computeTypeSpendBreakdown, computeSubCategorySpendBreakdown, computePlannedBreakdown,
+  computeAccountSpendBreakdown, computeTypeSpendBreakdownForAccount, computeAccountSpendBreakdownForType,
 } from '../utils/aggregations';
 import { formatCurrency, getTodayISO, shiftMonth, monthLabel } from '../utils/formatters';
 import Dropdown from '../components/Dropdown';
@@ -296,7 +297,18 @@ export default function MonthlyPage() {
   const [editingPlan, setEditingPlan] = useState(null);
   const [showTemplate, setShowTemplate] = useState(false);
   const [showLoadTemplate, setShowLoadTemplate] = useState(false);
-  const [drillIntoType, setDrillIntoType] = useState(null);
+  // Actual Breakdown pie: top-level grouping (Type, the original behavior,
+  // or Account - "how much came out of W-HDFC this month") plus a drilled-in
+  // slice label. When grouped by Type, drillMode additionally picks which
+  // dimension the drill-down itself uses (Sub-category, the original
+  // behavior, or Account) - so "WANTS -> Dining/Shopping" and "WANTS ->
+  // W-AXIS/CASH" are both reachable without a whole separate chart.
+  // Grouping by Account only ever drills into Type (no further level),
+  // since that's the specific view requested ("show all the actuals by
+  // Type" for a given account).
+  const [breakdownGroupBy, setBreakdownGroupBy] = useState('type'); // 'type' | 'account'
+  const [drillInto, setDrillInto] = useState(null);
+  const [drillMode, setDrillMode] = useState('subcategory'); // 'subcategory' | 'account' - only used when breakdownGroupBy === 'type'
   const [toast, setToast] = useState(null);
   const notify = (message, type = 'success') => setToast({ message, type });
 
@@ -327,15 +339,35 @@ export default function MonthlyPage() {
   const totalPlanned = monthPlans.reduce((sum, p) => sum + p.plannedAmount, 0);
   const totalActual = monthPlans.reduce((sum, p) => sum + actualForPlan(p), 0);
 
-  // Actual spending breakdown pie chart: Type-level by default, drills into
-  // a Type's Sub-categories when one is selected (e.g. tap "WANTS" to see
-  // Dining vs Shopping vs Entertainment).
-  const typeBreakdown = computeTypeSpendBreakdown(cashBook.rows, month);
-  const subCategoryBreakdown = drillIntoType ? computeSubCategorySpendBreakdown(cashBook.rows, month, drillIntoType) : null;
-  const actualPieData = (drillIntoType ? subCategoryBreakdown : typeBreakdown);
+  // Actual spending breakdown pie chart - top level is either Type (e.g.
+  // tap "WANTS" to see Dining vs Shopping vs Entertainment) or Account
+  // (e.g. tap "W-HDFC" to see which Types its spend went to), and a Type
+  // drill-down can itself be viewed by Sub-category or by Account.
+  const topLevelBreakdown = breakdownGroupBy === 'account'
+    ? computeAccountSpendBreakdown(cashBook.rows, month)
+    : computeTypeSpendBreakdown(cashBook.rows, month);
+
+  let drillBreakdown = null;
+  if (drillInto) {
+    if (breakdownGroupBy === 'account') {
+      drillBreakdown = computeTypeSpendBreakdownForAccount(cashBook.rows, month, drillInto);
+    } else if (drillMode === 'account') {
+      drillBreakdown = computeAccountSpendBreakdownForType(cashBook.rows, month, drillInto);
+    } else {
+      drillBreakdown = computeSubCategorySpendBreakdown(cashBook.rows, month, drillInto);
+    }
+  }
+
+  const actualPieData = drillInto ? drillBreakdown : topLevelBreakdown;
   const actualPieChartData = Array.from(actualPieData?.entries() || [])
     .map(([label, value]) => ({ label, value }))
     .sort((a, b) => b.value - a.value);
+
+  const actualBreakdownTitle = !drillInto
+    ? 'Actual Breakdown'
+    : breakdownGroupBy === 'account'
+      ? `${drillInto} - by Type`
+      : `${drillInto} - by ${drillMode === 'account' ? 'Account' : 'Sub-category'}`;
 
   // Planned breakdown pie chart - a companion to the Actual one above, but
   // sourced straight from this month's plans (no CashBook needed) since
@@ -464,23 +496,51 @@ export default function MonthlyPage() {
         <PieChart data={plannedPieChartData} />
       </div>
 
-      {/* Actual breakdown pie: Type-level by default, drills into a Type's
-          Sub-categories when one is tapped. */}
+      {/* Actual breakdown pie: grouped by Type or Account at the top level,
+          drilling one level further into Sub-category/Account (Type) or
+          just Type (Account) when a slice is tapped. */}
       <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
         <div className="flex items-center gap-2 mb-2">
-          {drillIntoType && (
-            <button onClick={() => setDrillIntoType(null)} className="text-gray-400"><ArrowLeft size={16} /></button>
+          {drillInto && (
+            <button onClick={() => setDrillInto(null)} className="text-gray-400"><ArrowLeft size={16} /></button>
           )}
-          <h2 className="text-sm font-semibold text-gray-500">
-            {drillIntoType ? `${drillIntoType} - by Sub-category` : 'Actual Breakdown'}
-          </h2>
+          <h2 className="text-sm font-semibold text-gray-500">{actualBreakdownTitle}</h2>
         </div>
+
+        {!drillInto && (
+          <div className="flex gap-1 mb-3">
+            {[{ key: 'type', label: 'By Type' }, { key: 'account', label: 'By Account' }].map((g) => (
+              <button key={g.key} onClick={() => { setBreakdownGroupBy(g.key); setDrillInto(null); }}
+                className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  breakdownGroupBy === g.key ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'
+                }`}>
+                {g.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {drillInto && breakdownGroupBy === 'type' && (
+          <div className="flex gap-1 mb-3">
+            {[{ key: 'subcategory', label: 'By Sub-category' }, { key: 'account', label: 'By Account' }].map((m) => (
+              <button key={m.key} onClick={() => setDrillMode(m.key)}
+                className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  drillMode === m.key ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'
+                }`}>
+                {m.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         <PieChart
           data={actualPieChartData}
-          onSliceClick={drillIntoType ? undefined : (label) => setDrillIntoType(label)}
+          onSliceClick={drillInto ? undefined : (label) => setDrillInto(label)}
         />
-        {!drillIntoType && actualPieChartData.length > 0 && (
-          <p className="text-xs text-gray-400 mt-2">Tap a category to see its sub-category breakdown.</p>
+        {!drillInto && actualPieChartData.length > 0 && (
+          <p className="text-xs text-gray-400 mt-2">
+            Tap a {breakdownGroupBy === 'account' ? 'account' : 'category'} to see its breakdown.
+          </p>
         )}
       </div>
 

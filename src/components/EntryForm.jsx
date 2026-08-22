@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, Trash2, Star } from 'lucide-react';
+import { X, Trash2, Star, Copy } from 'lucide-react';
 import Dropdown from './Dropdown';
 import CashBookLinkToggle from './CashBookLinkToggle';
 import { getTodayISO } from '../utils/formatters';
@@ -40,7 +40,7 @@ function makeUniqueProjectCode(name, existingCodes = []) {
 export default function EntryForm({
   type, lists, onSave, onClose, initialData, onDelete, isEditing, onAddListItem, existingProjectCodes,
   cashBookRows = [], favoritesForAccount, onToggleFavorite, subCategoriesForType, onAddSubCategory,
-  onSaveAndAddAnother,
+  onSaveAndAddAnother, onDuplicate,
 }) {
   const [form, setForm] = useState(initialData || {
     date: getTodayISO(),
@@ -351,6 +351,19 @@ export default function EntryForm({
             <button onClick={handleSubmitAndAddAnother} disabled={busy}
               className="w-full bg-gray-100 text-gray-700 py-2.5 rounded-xl font-medium text-sm active:scale-98 transition disabled:opacity-60">
               {isSaving ? 'Saving...' : 'Save & Add Another'}
+            </button>
+          )}
+
+          {/* Duplicate - only on an existing entry's edit screen, not a
+              brand-new form (nothing to duplicate yet). Hands the current
+              in-form field values (not the saved payload shape) to a fresh
+              New Entry form, so recurring-but-not-identical transactions
+              (e.g. this month's grocery run) don't need re-typing every
+              field from scratch. */}
+          {isEditing && onDuplicate && (
+            <button onClick={() => onDuplicate(form)} disabled={busy}
+              className="w-full flex items-center justify-center gap-2 bg-gray-100 text-gray-700 py-2.5 rounded-xl font-medium text-sm disabled:opacity-60">
+              <Copy size={14} /> Duplicate as New Entry
             </button>
           )}
 

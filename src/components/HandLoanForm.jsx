@@ -12,18 +12,29 @@ export default function HandLoanForm({ initial, direction, onSave, onDelete, onC
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState('');
+  // Only offered when creating a brand-new loan/lend, not on edits (avoids
+  // re-logging the same money movement every time it's corrected) - same
+  // "also log this in CashBook" pattern as EMI Prepayment/Hand Loan
+  // Payment/Credit Card Bill, reusing "Given From"/"Debits From" as the
+  // account instead of a second dropdown, since that field already answers
+  // "which account" for this exact transaction.
+  const [logToCashBook, setLogToCashBook] = useState(!initial);
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const busy = isSaving || isDeleting;
+  const isLent = form.direction === 'Lent';
 
   const handleSubmit = async () => {
     if (busy) return;
     if (!form.name.trim()) return setError('Please enter a name/description.');
     if (!form.principal) return setError('Please enter the amount.');
     if (!form.startDate) return setError('Please enter the date.');
+    if (!initial && logToCashBook && !form.debitsFrom) {
+      return setError(`Please select ${isLent ? 'Given From' : 'Debits From'}, or uncheck the CashBook option.`);
+    }
     setError('');
     setIsSaving(true);
     try {
-      await onSave(form);
+      await onSave({ ...form, logToCashBook: !initial && logToCashBook });
     } finally {
       setIsSaving(false);
     }
@@ -87,12 +98,18 @@ export default function HandLoanForm({ initial, direction, onSave, onDelete, onC
             </div>
           </div>
           <Dropdown
-            label={form.direction === 'Lent' ? 'Given From' : 'Debits From'}
+            label={isLent ? 'Given From' : 'Debits From'}
             options={accountOptions}
             value={form.debitsFrom}
             onChange={(v) => set('debitsFrom', v)}
             onAddNew={onAddAccount}
           />
+          {!initial && (
+            <label className="flex items-center gap-2 text-sm text-gray-700 bg-gray-50 rounded-lg p-3">
+              <input type="checkbox" checked={logToCashBook} onChange={(e) => setLogToCashBook(e.target.checked)} disabled={busy} />
+              Also log this in CashBook ({isLent ? 'Money OUT' : 'Money IN'}{form.debitsFrom ? ` - ${form.debitsFrom}` : ''})
+            </label>
+          )}
           <div>
             <label className="text-xs text-gray-500">Notes</label>
             <input type="text" value={form.notes} onChange={(e) => set('notes', e.target.value)} disabled={busy}

@@ -21,6 +21,7 @@ export default function CashBookPage() {
   const [showTransferForm, setShowTransferForm] = useState(false);
   const [transferPrefill, setTransferPrefill] = useState(null);
   const [editingRow, setEditingRow] = useState(null); // { index, data }
+  const [duplicatePrefill, setDuplicatePrefill] = useState(null);
   const [reconcileAccount, setReconcileAccount] = useState(null);
   const [showAllAccounts, setShowAllAccounts] = useState(false);
   const [toast, setToast] = useState(null);
@@ -65,6 +66,7 @@ export default function CashBookPage() {
     try {
       await addEntry(entry);
       setShowForm(false);
+      setDuplicatePrefill(null);
       setToast({ message: 'Entry saved!', type: 'success' });
     } catch {
       setToast({ message: 'Failed to save. Check internet.', type: 'error' });
@@ -101,6 +103,16 @@ export default function CashBookPage() {
     } catch {
       setToast({ message: 'Failed to delete.', type: 'error' });
     }
+  };
+
+  // Switches from editing an existing row to a brand-new "Add Entry" form
+  // pre-filled with its current field values - a shortcut for recurring
+  // transactions (e.g. this month's similar grocery run) instead of typing
+  // every field again from a blank form.
+  const handleDuplicate = (data) => {
+    setEditingRow(null);
+    setDuplicatePrefill(data);
+    setShowForm(true);
   };
 
   const openEdit = (originalIndex, row) => {
@@ -280,7 +292,7 @@ export default function CashBookPage() {
       </div>
 
       <FAB actions={[
-        { label: 'Add Entry', icon: Plus, onClick: () => setShowForm(true) },
+        { label: 'Add Entry', icon: Plus, onClick: () => { setDuplicatePrefill(null); setShowForm(true); } },
         { label: 'Transfer', icon: ArrowLeftRight, onClick: () => setShowTransferForm(true) },
       ]} />
 
@@ -288,9 +300,10 @@ export default function CashBookPage() {
         <EntryForm
           type="cashbook"
           lists={lists}
+          initialData={duplicatePrefill}
           onSave={handleSave}
           onSaveAndAddAnother={handleSaveAndAddAnother}
-          onClose={() => setShowForm(false)}
+          onClose={() => { setShowForm(false); setDuplicatePrefill(null); }}
           onAddListItem={addListItem}
           cashBookRows={rows}
           favoritesForAccount={accountTypeFavorites.favoritesForAccount}
@@ -309,6 +322,7 @@ export default function CashBookPage() {
           initialData={editingRow.data}
           onSave={handleEdit}
           onDelete={handleDelete}
+          onDuplicate={handleDuplicate}
           onClose={() => setEditingRow(null)}
           cashBookRows={rows}
           favoritesForAccount={accountTypeFavorites.favoritesForAccount}
