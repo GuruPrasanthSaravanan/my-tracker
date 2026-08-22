@@ -3,7 +3,7 @@ import { useAppData } from '../contexts/DataContext';
 import { computeProjectSpent, computeMonthSurplus } from '../utils/aggregations';
 import { formatCurrency, formatDate, getTodayISO } from '../utils/formatters';
 import ProgressBar from '../components/ProgressBar';
-import { Plus, ArrowRight } from 'lucide-react';
+import { Plus, ArrowRight, ArrowLeftRight } from 'lucide-react';
 
 export default function DashboardPage() {
   const { cashBook, vendors, projects, emiLoans, handLoans, creditCards } = useAppData();
@@ -37,10 +37,14 @@ export default function DashboardPage() {
     .sort((a, b) => a.date.localeCompare(b.date));
   const nextDue = dueItems[0];
 
+  // Each navigates with state that the target page reads on mount to open
+  // the relevant form immediately, instead of landing on the page and
+  // requiring a second tap - that's what makes these actually "quick".
   const quickActions = [
-    { label: 'Add CashBook Entry', onClick: () => navigate('/cashbook') },
-    { label: 'Add Vendor Entry', onClick: () => navigate('/vendors') },
-    { label: 'Record Debt Payment', onClick: () => navigate('/debts') },
+    { label: 'Add CashBook Entry', icon: Plus, onClick: () => navigate('/cashbook', { state: { openForm: true } }) },
+    { label: 'Transfer Between Accounts', icon: ArrowLeftRight, onClick: () => navigate('/cashbook', { state: { openTransfer: true } }) },
+    { label: 'Add Vendor Entry', icon: Plus, onClick: () => navigate('/vendors', { state: { openForm: true } }) },
+    { label: 'Record Debt Payment', icon: ArrowRight, onClick: () => navigate('/debts') },
   ];
 
   return (
@@ -90,7 +94,7 @@ export default function DashboardPage() {
           {quickActions.map((a) => (
             <button key={a.label} onClick={a.onClick}
               className="w-full flex items-center justify-between bg-white rounded-xl px-4 py-3 shadow-sm text-sm font-medium text-gray-700 active:bg-gray-50">
-              <span className="flex items-center gap-2"><Plus size={16} className="text-primary" /> {a.label}</span>
+              <span className="flex items-center gap-2"><a.icon size={16} className="text-primary" /> {a.label}</span>
               <ArrowRight size={16} className="text-gray-300" />
             </button>
           ))}

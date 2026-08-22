@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppData } from '../contexts/DataContext';
 import SummaryCard from '../components/SummaryCard';
 import TransactionRow from '../components/TransactionRow';
@@ -16,6 +17,18 @@ export default function VendorsPage() {
   const [editingRow, setEditingRow] = useState(null);
   const [filterVendor, setFilterVendor] = useState(null);
   const [toast, setToast] = useState(null);
+
+  // See CashBookPage.jsx for why: Dashboard's Quick Actions navigate here
+  // with state to open the Add form immediately.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (location.state?.openForm) {
+      setShowForm(true);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSave = async (entry) => {
     try {

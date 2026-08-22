@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppData } from '../contexts/DataContext';
 import SummaryCard from '../components/SummaryCard';
 import TransactionRow from '../components/TransactionRow';
@@ -21,6 +22,21 @@ export default function CashBookPage() {
   const [editingRow, setEditingRow] = useState(null); // { index, data }
   const [reconcileAccount, setReconcileAccount] = useState(null);
   const [toast, setToast] = useState(null);
+
+  // Dashboard's Quick Actions navigate here with state telling us to open a
+  // form immediately, instead of landing on the page and requiring a second
+  // tap. Consumed once and cleared from history state so it doesn't
+  // re-trigger on a later back/forward navigation or refresh.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (location.state?.openForm) setShowForm(true);
+    if (location.state?.openTransfer) setShowTransferForm(true);
+    if (location.state?.openForm || location.state?.openTransfer) {
+      navigate(location.pathname, { replace: true, state: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSaveTransfer = async (transfer) => {
     try {
@@ -160,10 +176,10 @@ export default function CashBookPage() {
 
       <button
         onClick={() => setShowTransferForm(true)}
-        className="fixed bottom-40 right-4 w-11 h-11 bg-white text-primary border border-primary/30 rounded-full shadow-lg flex items-center justify-center active:scale-95 transition z-10"
+        className="fixed bottom-40 right-4 w-14 h-14 bg-primary text-white rounded-full shadow-lg flex items-center justify-center active:scale-95 transition z-10"
         aria-label="Transfer between accounts"
       >
-        <ArrowLeftRight size={18} />
+        <ArrowLeftRight size={24} />
       </button>
       <FAB onClick={() => setShowForm(true)} />
 
