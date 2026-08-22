@@ -13,7 +13,7 @@ export function useProjects() {
     setIsLoading(true);
     try {
       const [projData, msData] = await Promise.all([
-        readSheet(token, 'Projects!A2:M1000'),
+        readSheet(token, 'Projects!A2:N1000'),
         readSheet(token, 'Milestones!A2:F2000'),
       ]);
       setProjects(projData);
@@ -32,9 +32,9 @@ export function useProjects() {
       entry.code, entry.name, entry.budget || '',
       entry.estLabour || '', entry.estMaterial || '', entry.estMachine || '', entry.estOther || '',
       entry.startDate || '', entry.endDatePlanned || '', '',
-      entry.manager || '', entry.status || 'Not Started', entry.notes || '',
+      entry.manager || '', entry.status || 'Not Started', entry.notes || '', entry.payoffPriority || '',
     ];
-    await appendRowAt(token, 'Projects', 'M', projects.length, values);
+    await appendRowAt(token, 'Projects', 'N', projects.length, values);
     await fetchData();
   }, [token, fetchData, projects]);
 
@@ -44,9 +44,9 @@ export function useProjects() {
       entry.code, entry.name, entry.budget || '',
       entry.estLabour || '', entry.estMaterial || '', entry.estMachine || '', entry.estOther || '',
       entry.startDate || '', entry.endDatePlanned || '', entry.endDateActual || '',
-      entry.manager || '', entry.status || '', entry.notes || '',
+      entry.manager || '', entry.status || '', entry.notes || '', entry.payoffPriority || '',
     ];
-    await updateRow(token, `Projects!A${sheetRow}:M${sheetRow}`, values);
+    await updateRow(token, `Projects!A${sheetRow}:N${sheetRow}`, values);
     await fetchData();
   }, [token, fetchData]);
 
@@ -75,6 +75,7 @@ export function useProjects() {
     manager: row[10] || '',
     status: row[11] || '',
     notes: row[12] || '',
+    payoffPriority: row[13] ? parseInt(row[13]) : null,
   }));
 
   const parsedMilestones = milestones.map((row) => ({

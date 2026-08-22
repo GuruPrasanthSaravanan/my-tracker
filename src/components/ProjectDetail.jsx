@@ -15,6 +15,7 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
     manager: project.manager || '',
     status: project.status || 'Not Started',
     notes: project.notes || '',
+    payoffPriority: project.payoffPriority != null ? String(project.payoffPriority) : '',
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -69,6 +70,7 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
         manager: editForm.manager,
         status: editForm.status,
         notes: editForm.notes,
+        payoffPriority: editForm.payoffPriority ? parseInt(editForm.payoffPriority) : '',
       });
       setShowEditForm(false);
     } finally {
@@ -131,6 +133,13 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
                 <input type="text" value={editForm.manager}
                   onChange={(e) => setEditForm(f => ({ ...f, manager: e.target.value }))}
                   disabled={isSaving}
+                  className="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5 disabled:opacity-50" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Payoff Priority (optional)</label>
+                <input type="number" inputMode="numeric" value={editForm.payoffPriority}
+                  onChange={(e) => setEditForm(f => ({ ...f, payoffPriority: e.target.value }))}
+                  disabled={isSaving} placeholder="e.g. 1 = fund first"
                   className="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5 disabled:opacity-50" />
               </div>
               <div>

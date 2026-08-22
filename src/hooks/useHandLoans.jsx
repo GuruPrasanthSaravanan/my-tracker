@@ -3,9 +3,11 @@ import { useAuth } from '../auth/useAuth';
 import { readSheet, appendRowAt, updateRow, clearRow } from '../api/sheets';
 import { computeSimpleInterestAccrued, splitPayment } from '../utils/loanCalculations';
 
-// HandLoans tab layout: [Name, Principal, AnnualRate, StartDate, Direction, DebitsFrom, Status, Notes]
+// HandLoans tab layout: [Name, Principal, AnnualRate, StartDate, Direction, DebitsFrom, Status, Notes, PayoffPriority]
 //   Direction: 'Owe' (I owe this) or 'Lent' (I lent this to someone)
 //   Status: 'Active' | 'Closed'
+//   PayoffPriority: optional number - lower = attacked first by the Debt Payoff
+//     Trajectory projection (debtAvalancheProjection.js). Blank = not included.
 // HandLoanPayments tab layout: [LoanName, Date, Amount, InterestPaid, PrincipalPaid, RemainingPrincipal]
 export function useHandLoans() {
   const { token } = useAuth();
@@ -18,7 +20,7 @@ export function useHandLoans() {
     setIsLoading(true);
     try {
       const [loanData, paymentData] = await Promise.all([
-        readSheet(token, 'HandLoans!A2:H500'),
+        readSheet(token, 'HandLoans!A2:I500'),
         readSheet(token, 'HandLoanPayments!A2:F2000'),
       ]);
       setRows(loanData);
@@ -36,8 +38,9 @@ export function useHandLoans() {
     const values = [
       entry.name, entry.principal, entry.annualRate || 0, entry.startDate,
       entry.direction || 'Owe', entry.debitsFrom || '', entry.status || 'Active', entry.notes || '',
+      entry.payoffPriority || '',
     ];
-    await appendRowAt(token, 'HandLoans', 'H', rows.length, values);
+    await appendRowAt(token, 'HandLoans', 'I', rows.length, values);
     await fetchData();
   }, [token, fetchData, rows]);
 
@@ -46,14 +49,15 @@ export function useHandLoans() {
     const values = [
       entry.name, entry.principal, entry.annualRate || 0, entry.startDate,
       entry.direction || 'Owe', entry.debitsFrom || '', entry.status || 'Active', entry.notes || '',
+      entry.payoffPriority || '',
     ];
-    await updateRow(token, `HandLoans!A${sheetRow}:H${sheetRow}`, values);
+    await updateRow(token, `HandLoans!A${sheetRow}:I${sheetRow}`, values);
     await fetchData();
   }, [token, fetchData]);
 
   const deleteLoan = useCallback(async (rowIndex) => {
     const sheetRow = rowIndex + 2;
-    await clearRow(token, `HandLoans!A${sheetRow}:H${sheetRow}`);
+    await clearRow(token, `HandLoans!A${sheetRow}:I${sheetRow}`);
     await fetchData();
   }, [token, fetchData]);
 
@@ -68,6 +72,7 @@ export function useHandLoans() {
       debitsFrom: row[5] || '',
       status: row[6] || 'Active',
       notes: row[7] || '',
+      payoffPriority: row[8] ? parseInt(row[8]) : null,
     }))
     .filter((loan) => loan.name);
 

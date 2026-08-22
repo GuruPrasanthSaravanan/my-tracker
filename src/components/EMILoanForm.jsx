@@ -7,7 +7,7 @@ export default function EMILoanForm({ initial, onSave, onDelete, onClose, accoun
   const [form, setForm] = useState(initial || {
     name: '', principal: '', annualRate: '', tenureMonths: '',
     startDate: getTodayISO(), debitsFrom: '', status: 'Active', notes: '',
-    emiDate: '', actualEMI: '',
+    emiDate: '', actualEMI: '', payoffPriority: '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -119,6 +119,16 @@ export default function EMILoanForm({ initial, onSave, onDelete, onClose, accoun
                 <option value="Closed">Closed</option>
               </select>
             </div>
+          </div>
+          <div>
+            <label className="text-xs text-gray-500">Payoff Priority (optional)</label>
+            <input type="number" inputMode="numeric" value={form.payoffPriority || ''}
+              onChange={(e) => set('payoffPriority', e.target.value)} disabled={busy}
+              placeholder="e.g. 1 = prepay first" className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
+            <p className="text-xs text-gray-400 mt-0.5">
+              Lower number = prepaid first (once all priority-tagged Hand Loans are cleared) in the Monthly
+              page's Debt Payoff Trajectory. Leave blank to exclude this loan from that projection.
+            </p>
           </div>
           <div>
             <label className="text-xs text-gray-500">Notes</label>
