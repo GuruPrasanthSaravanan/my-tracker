@@ -408,8 +408,7 @@ export default function MonthlyPage() {
   // Planned vs Actual bar chart - grouping is user-selectable (barGroupBy):
   // "By Type" (default) rolls every plan sharing a Category into one bar -
   // e.g. "SALARY [ICICI]" and "SALARY [W-ICICI]" combine into one "SALARY"
-  // row, matching "the actual budget" view discussed in bugs-and-lessons.md
-  // §40 - "By Account" instead rolls plans up by their Account (plans with
+  // row - "By Account" instead rolls plans up by their Account (plans with
   // none set fall into "(No Account)"), and "By Type + Account" keeps the
   // original one-row-per-plan behavior for when the his/hers or per-loan
   // split still needs to be visible in this specific chart.
@@ -428,16 +427,45 @@ export default function MonthlyPage() {
     planned: Math.abs(p.plannedAmount),
     actual: Math.abs(actualForPlan(p)),
   }));
-  const barChartData = (barGroupBy === 'plan' ? barChartRows : Array.from(
-    barChartRows.reduce((grouped, row) => {
-      const key = barGroupBy === 'account' ? row.account : row.category;
-      const entry = grouped.get(key) || { label: key, planned: 0, actual: 0 };
-      entry.planned += row.planned;
-      entry.actual += row.actual;
-      grouped.set(key, entry);
-      return grouped;
-    }, new Map()).values()
-  )).sort((a, b) => b.planned - a.planned);
+
+  let barChartData;
+  if (barGroupBy === 'plan') {
+    barChartData = barChartRows;
+  } else if (barGroupBy === 'type') {
+    // Unlike the other two modes, this one does NOT sum each plan's own
+    // actualForPlan (which is itself Account-narrowed) - a Category can
+    // easily have real CashBook spend on accounts no plan happens to be
+    // scoped to, which would otherwise understate "the actual budget" this
+    // view is meant to show. Instead uses `actuals` (computeMonthlyActuals)
+    // - the Type's true total across every account, "despite of the
+    // account" set on any one plan. TRANSFER is the one exception: netting
+    // every transfer's paired Money-IN/-OUT legs this way collapses to
+    // ~0 for fully-paired transfers, so it keeps using the per-plan
+    // paired-transfer amount (computeActualForTransferPlan via actualForPlan) instead.
+    const grouped = new Map();
+    for (const p of monthPlans) {
+      const entry = grouped.get(p.category) || { label: p.category, planned: 0 };
+      entry.planned += Math.abs(p.plannedAmount);
+      grouped.set(p.category, entry);
+    }
+    for (const [category, entry] of grouped) {
+      entry.actual = category === 'TRANSFER'
+        ? monthPlans.filter((p) => p.category === 'TRANSFER').reduce((sum, p) => sum + Math.abs(actualForPlan(p)), 0)
+        : Math.abs(actuals.get(category) || 0);
+    }
+    barChartData = Array.from(grouped.values());
+  } else {
+    barChartData = Array.from(
+      barChartRows.reduce((grouped, row) => {
+        const entry = grouped.get(row.account) || { label: row.account, planned: 0, actual: 0 };
+        entry.planned += row.planned;
+        entry.actual += row.actual;
+        grouped.set(row.account, entry);
+        return grouped;
+      }, new Map()).values()
+    );
+  }
+  barChartData = barChartData.sort((a, b) => b.planned - a.planned);
 
   const handleSave = async (entry) => {
     try {
