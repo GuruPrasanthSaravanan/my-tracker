@@ -5,7 +5,7 @@ import { SPREADSHEET_ID } from '../config';
 import { deleteSheetTab } from '../api/sheets';
 import { formatCurrency } from '../utils/formatters';
 import Toast from '../components/Toast';
-import { X, Download, LogOut, ExternalLink, Info, AlertTriangle } from 'lucide-react';
+import { X, Pencil, Download, LogOut, ExternalLink, Info, AlertTriangle } from 'lucide-react';
 
 const LIST_TABS = [
   { key: 'accounts', label: 'Accounts' },
@@ -106,11 +106,76 @@ function AccountInfoForm({ account, initial, onSave, onClose }) {
   );
 }
 
+/**
+ * Renames a list value everywhere it's used (see api/lists.js
+ * CASCADE_TARGETS) - not just the dropdown. Warns (but doesn't block) if the
+ * new name collides with another existing value in the same list, since
+ * that would merge the two together - which could be intentional (e.g.
+ * fixing "ICICI" and "Icici" into one) but shouldn't happen silently.
+ */
+function RenameListValueForm({ listLabel, oldValue, existingValues, onSave, onClose }) {
+  const [newValue, setNewValue] = useState(oldValue);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const collision = existingValues.some((v) => v !== oldValue && v.toLowerCase() === newValue.trim().toLowerCase());
+
+  const handleSubmit = async () => {
+    if (isSaving) return;
+    if (!newValue.trim()) return setError('Please enter a value.');
+    setError('');
+    setIsSaving(true);
+    try {
+      await onSave(newValue.trim());
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-end">
+      <div className="bg-white w-full rounded-t-2xl p-4 pb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold">Rename {listLabel} Value</h2>
+          <button onClick={onClose} disabled={isSaving} className="p-1"><X size={20} /></button>
+        </div>
+        <div className="space-y-3">
+          {error && <div className="bg-red-50 text-danger text-sm px-3 py-2 rounded-lg">{error}</div>}
+          <div>
+            <label className="text-xs text-gray-500">New Value</label>
+            <input type="text" value={newValue} onChange={(e) => setNewValue(e.target.value)}
+              disabled={isSaving} autoFocus
+              className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
+          </div>
+          {collision && (
+            <p className="text-xs text-amber-600 flex items-start gap-1">
+              <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+              "{newValue.trim()}" already exists in this list - saving will merge every "{oldValue}" entry into it.
+            </p>
+          )}
+          <p className="text-xs text-gray-400">
+            Updates every past entry that used "{oldValue}" across the whole app (CashBook, loans, monthly plans,
+            etc.), not just this dropdown - so balances and totals stay correct after the rename.
+          </p>
+          <button onClick={handleSubmit} disabled={isSaving}
+            className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-lg mt-2 disabled:opacity-60">
+            {isSaving ? 'Renaming...' : 'Rename'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
-  const { lists, cashBook, vendors, projects, emiLoans, handLoans, creditCards, monthly, netWorth, accountSettings } = useAppData();
+  const {
+    lists, cashBook, vendors, projects, emiLoans, handLoans, creditCards, chitFunds,
+    monthly, netWorth, accountSettings, accountTypeFavorites, subCategories,
+  } = useAppData();
   const { user, signOut, token } = useAuth();
   const [activeListTab, setActiveListTab] = useState('accounts');
   const [removing, setRemoving] = useState(null);
+  const [renamingValue, setRenamingValue] = useState(null);
   const [editingAccount, setEditingAccount] = useState(null);
   const [confirmDeleteDebts, setConfirmDeleteDebts] = useState(false);
   const [isDeletingDebts, setIsDeletingDebts] = useState(false);
@@ -126,6 +191,29 @@ export default function SettingsPage() {
       notify('Failed to remove. It may still be in use elsewhere.', 'error');
     } finally {
       setRemoving(null);
+    }
+  };
+
+  // A rename cascades across most of the app's tabs (see api/lists.js
+  // CASCADE_TARGETS), so every hook whose tab could have been touched needs
+  // to refetch afterward - otherwise the rest of the app would keep showing
+  // stale pre-rename values until the next navigation/reload.
+  const handleRename = async (newValue) => {
+    try {
+      const result = await lists.renameListItem(activeListTab, renamingValue, newValue);
+      if (!result.renamed) {
+        notify('Could not find that value to rename.', 'error');
+        return;
+      }
+      await Promise.all([
+        cashBook.refresh(), vendors.refresh(), projects.refresh(), emiLoans.refresh(),
+        handLoans.refresh(), creditCards.refresh(), chitFunds.refresh(), monthly.refresh(),
+        accountSettings.refresh(), accountTypeFavorites.refresh(), subCategories.refresh(),
+      ]);
+      setRenamingValue(null);
+      notify(`Renamed to "${newValue}"${result.cellsUpdated > 0 ? ` - updated ${result.cellsUpdated} other entr${result.cellsUpdated === 1 ? 'y' : 'ies'}.` : '.'}`);
+    } catch {
+      notify('Failed to rename. Please try again.', 'error');
     }
   };
 
@@ -219,6 +307,10 @@ export default function SettingsPage() {
               {lists.lists[activeListTab].map((value) => (
                 <span key={value} className="flex items-center gap-1 bg-gray-100 text-gray-700 text-xs px-2.5 py-1.5 rounded-full">
                   {value}
+                  <button onClick={() => setRenamingValue(value)}
+                    className="text-gray-400 hover:text-primary">
+                    <Pencil size={12} />
+                  </button>
                   <button onClick={() => handleRemove(value)} disabled={removing === value}
                     className="text-gray-400 hover:text-danger disabled:opacity-50">
                     <X size={12} />
@@ -230,8 +322,19 @@ export default function SettingsPage() {
         </div>
         <p className="text-xs text-gray-400 mt-2">
           Removing a value here only removes it from the dropdown - past entries that used it are unaffected.
+          Renaming updates every past entry too, so balances and totals stay correct.
         </p>
       </div>
+
+      {renamingValue && (
+        <RenameListValueForm
+          listLabel={LIST_TABS.find((t) => t.key === activeListTab)?.label || activeListTab}
+          oldValue={renamingValue}
+          existingValues={lists.lists[activeListTab] || []}
+          onSave={handleRename}
+          onClose={() => setRenamingValue(null)}
+        />
+      )}
 
       {/* Account Info */}
       <div>

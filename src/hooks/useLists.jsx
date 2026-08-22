@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
-import { fetchLists, addToList, removeFromList } from '../api/lists';
+import { fetchLists, addToList, removeFromList, renameListValue } from '../api/lists';
 
 export function useLists() {
   const { token } = useAuth();
@@ -45,5 +45,25 @@ export function useLists() {
     return removed;
   }, [token]);
 
-  return { lists, isLoading, addListItem, removeListItem, refresh };
+  /**
+   * Renames a list value everywhere it's referenced (see api/lists.js
+   * CASCADE_TARGETS) - not just the dropdown list itself. Callers should
+   * also refresh every other hook whose tab might have been touched by the
+   * cascade (cashBook, emiLoans, handLoans, creditCards, chitFunds,
+   * accountSettings, monthly, vendors, projects) since this hook only knows
+   * about the Lists tab's own state.
+   */
+  const renameListItem = useCallback(async (listName, oldValue, newValue) => {
+    if (!token) return { renamed: false, cellsUpdated: 0 };
+    const result = await renameListValue(token, listName, oldValue, newValue);
+    if (result.renamed) {
+      setLists((prev) => ({
+        ...prev,
+        [listName]: prev[listName].map((v) => (v === oldValue ? newValue.trim() : v)),
+      }));
+    }
+    return result;
+  }, [token]);
+
+  return { lists, isLoading, addListItem, removeListItem, renameListItem, refresh };
 }
