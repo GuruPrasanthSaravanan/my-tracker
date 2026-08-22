@@ -310,6 +310,13 @@ export default function MonthlyPage() {
   const [breakdownGroupBy, setBreakdownGroupBy] = useState('type'); // 'type' | 'account'
   const [drillInto, setDrillInto] = useState(null);
   const [drillMode, setDrillMode] = useState('subcategory'); // 'subcategory' | 'account' - only used when breakdownGroupBy === 'type'
+
+  // Planned vs Actual bar chart's row grouping - 'type' rolls plans sharing
+  // a Category into one bar (the default "actual budget" view), 'account'
+  // rolls plans up by Account instead, 'plan' keeps one row per plan (the
+  // original behavior, for when the his/hers or per-loan split needs to
+  // stay visible in this specific chart).
+  const [barGroupBy, setBarGroupBy] = useState('type'); // 'type' | 'account' | 'plan'
   const [toast, setToast] = useState(null);
   const notify = (message, type = 'success') => setToast({ message, type });
 
@@ -398,8 +405,14 @@ export default function MonthlyPage() {
     .map(([label, value]) => ({ label, value }))
     .sort((a, b) => b.value - a.value);
 
-  // Planned vs Actual bar chart - one row per category actually planned
-  // this month, so it's directly comparable to the Categories list below.
+  // Planned vs Actual bar chart - grouping is user-selectable (barGroupBy):
+  // "By Type" (default) rolls every plan sharing a Category into one bar -
+  // e.g. "SALARY [ICICI]" and "SALARY [W-ICICI]" combine into one "SALARY"
+  // row, matching "the actual budget" view discussed in bugs-and-lessons.md
+  // §40 - "By Account" instead rolls plans up by their Account (plans with
+  // none set fall into "(No Account)"), and "By Type + Account" keeps the
+  // original one-row-per-plan behavior for when the his/hers or per-loan
+  // split still needs to be visible in this specific chart.
   // `actualForPlan` returns a signed net (Money IN - Money OUT), which is
   // naturally *negative* for an outflow category (e.g. -72,040 for a
   // 72,040 EMI payment) - but Planned Amount is always entered as a plain
@@ -408,13 +421,23 @@ export default function MonthlyPage() {
   // width math and showed a confusing negative number, so both sides are
   // compared as magnitudes here instead - this chart is about "how much
   // activity happened vs how much was planned," not the sign/direction.
-  const barChartData = monthPlans
-    .map((p) => ({
-      label: accountLabel(p) ? `${p.category} (${accountLabel(p)})` : p.category,
-      planned: Math.abs(p.plannedAmount),
-      actual: Math.abs(actualForPlan(p)),
-    }))
-    .sort((a, b) => b.planned - a.planned);
+  const barChartRows = monthPlans.map((p) => ({
+    category: p.category,
+    account: p.account || '(No Account)',
+    label: accountLabel(p) ? `${p.category} (${accountLabel(p)})` : p.category,
+    planned: Math.abs(p.plannedAmount),
+    actual: Math.abs(actualForPlan(p)),
+  }));
+  const barChartData = (barGroupBy === 'plan' ? barChartRows : Array.from(
+    barChartRows.reduce((grouped, row) => {
+      const key = barGroupBy === 'account' ? row.account : row.category;
+      const entry = grouped.get(key) || { label: key, planned: 0, actual: 0 };
+      entry.planned += row.planned;
+      entry.actual += row.actual;
+      grouped.set(key, entry);
+      return grouped;
+    }, new Map()).values()
+  )).sort((a, b) => b.planned - a.planned);
 
   const handleSave = async (entry) => {
     try {
@@ -577,10 +600,25 @@ export default function MonthlyPage() {
         )}
       </div>
 
-      {/* Planned vs Actual bar chart - one row per planned category, so you
-          can see at a glance which ones are running over. */}
+      {/* Planned vs Actual bar chart - grouping toggle lets this be either
+          a per-plan view (today's Category+Account split intact) or a
+          rolled-up Type/Account budget view. */}
       <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
         <h2 className="text-sm font-semibold text-gray-500 mb-3">Planned vs Actual</h2>
+        <div className="flex gap-1 mb-3">
+          {[
+            { key: 'type', label: 'By Type' },
+            { key: 'account', label: 'By Account' },
+            { key: 'plan', label: 'By Type + Account' },
+          ].map((g) => (
+            <button key={g.key} onClick={() => setBarGroupBy(g.key)}
+              className={`px-3 py-1 rounded-full text-xs font-medium ${
+                barGroupBy === g.key ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'
+              }`}>
+              {g.label}
+            </button>
+          ))}
+        </div>
         <BarChart data={barChartData} />
       </div>
 
