@@ -13,7 +13,7 @@ import { formatCurrency, getTodayISO } from '../utils/formatters';
 import { ArrowLeftRight } from 'lucide-react';
 
 export default function CashBookPage() {
-  const { cashBook, lists: listsData, accountSettings } = useAppData();
+  const { cashBook, lists: listsData, accountSettings, accountTypeFavorites, subCategories } = useAppData();
   const { rows, isLoading, addEntry, editEntry, deleteEntry, addTransfer, totalBalance, accountBalances } = cashBook;
   const { lists, addListItem } = listsData;
   const { minBalances, setMinBalance } = accountSettings;
@@ -96,6 +96,7 @@ export default function CashBookPage() {
         amount: String(moneyIn || parseFloat(row[5]) || ''),
         direction: moneyIn ? 'in' : 'out',
         project: row[6] || '',
+        subCategory: row[7] || '',
       },
     });
   };
@@ -197,6 +198,11 @@ export default function CashBookPage() {
           onSave={handleSave}
           onClose={() => setShowForm(false)}
           onAddListItem={addListItem}
+          cashBookRows={rows}
+          favoritesForAccount={accountTypeFavorites.favoritesForAccount}
+          onToggleFavorite={accountTypeFavorites.toggleFavorite}
+          subCategoriesForType={subCategories.subCategoriesForType}
+          onAddSubCategory={subCategories.addSubCategory}
         />
       )}
 
@@ -210,6 +216,11 @@ export default function CashBookPage() {
           onSave={handleEdit}
           onDelete={handleDelete}
           onClose={() => setEditingRow(null)}
+          cashBookRows={rows}
+          favoritesForAccount={accountTypeFavorites.favoritesForAccount}
+          onToggleFavorite={accountTypeFavorites.toggleFavorite}
+          subCategoriesForType={subCategories.subCategoriesForType}
+          onAddSubCategory={subCategories.addSubCategory}
         />
       )}
 

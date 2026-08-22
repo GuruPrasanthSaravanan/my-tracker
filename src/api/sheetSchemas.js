@@ -6,7 +6,7 @@
  */
 export const SHEET_SCHEMAS = {
   Lists: ['Accounts', 'Types', 'Vendors', 'Projects', 'MilestoneStatuses'],
-  CashBook: ['Date', 'Description', 'Account', 'Type', 'Money IN', 'Money OUT', 'Project'],
+  CashBook: ['Date', 'Description', 'Account', 'Type', 'Money IN', 'Money OUT', 'Project', 'SubCategory'],
   Vendors: ['Date', 'Vendor', 'Description', 'Project', 'Bill', 'Paid'],
   Projects: [
     'Code', 'Name', 'Budget', 'Est.Labour', 'Est.Material', 'Est.Machine', 'Est.Other',
@@ -23,4 +23,6 @@ export const SHEET_SCHEMAS = {
   MonthlyPlans: ['Month', 'Category', 'PlannedAmount', 'Section', 'Account'],
   MonthlyTemplate: ['Category', 'Section', 'DefaultPlannedAmount', 'Account'],
   NetWorthSnapshots: ['Date', 'AssetsTotal', 'LiabilitiesTotal', 'Notes'],
+  AccountTypeFavorites: ['Account', 'Type'],
+  SubCategories: ['Type', 'SubCategory'],
 };

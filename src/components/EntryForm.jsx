@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { X, Trash2 } from 'lucide-react';
+import { X, Trash2, Star } from 'lucide-react';
 import Dropdown from './Dropdown';
 import CashBookLinkToggle from './CashBookLinkToggle';
 import { getTodayISO } from '../utils/formatters';
+import { orderTypeOptionsForAccount } from '../utils/aggregations';
 
 const titles = {
   cashbook: 'CashBook Entry',
@@ -36,7 +37,10 @@ function makeUniqueProjectCode(name, existingCodes = []) {
   return candidate;
 }
 
-export default function EntryForm({ type, lists, onSave, onClose, initialData, onDelete, isEditing, onAddListItem, existingProjectCodes }) {
+export default function EntryForm({
+  type, lists, onSave, onClose, initialData, onDelete, isEditing, onAddListItem, existingProjectCodes,
+  cashBookRows = [], favoritesForAccount, onToggleFavorite, subCategoriesForType, onAddSubCategory,
+}) {
   const [form, setForm] = useState(initialData || {
     date: getTodayISO(),
     description: '',
@@ -44,6 +48,7 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
     type: '',
     vendor: '',
     project: '',
+    subCategory: '',
     amount: '',
     direction: 'out',
   });
@@ -66,6 +71,26 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
   // selected - money spent on a project directly via CashBook (not routed
   // through the Vendors tab) then counts toward that project's spend too.
   const showProjectField = type === 'cashbook' && form.type === 'PROJECT';
+
+  // Reorders the Type dropdown once an Account is picked: favorites pinned
+  // for that account first, then Types historically used with it (most
+  // frequent first), then everything else untouched - never hides options,
+  // just surfaces the likely ones first. See aggregations.js for why a hard
+  // filter was rejected (it could lock you out of a legitimately new
+  // combination).
+  const accountFavorites = type === 'cashbook' && form.account && favoritesForAccount
+    ? favoritesForAccount(form.account) : [];
+  const orderedTypeOptions = type === 'cashbook'
+    ? orderTypeOptionsForAccount(lists.types, cashBookRows, form.account, accountFavorites)
+    : lists.types;
+  const isFavoriteType = form.account && form.type && accountFavorites.includes(form.type);
+
+  // General-purpose sub-category, scoped to whichever Type is selected -
+  // e.g. Type=WANTS -> Dining/Shopping/Entertainment - for the Monthly
+  // page's spending pie chart drill-down.
+  const subCategoryOptions = type === 'cashbook' && form.type && subCategoriesForType
+    ? subCategoriesForType(form.type) : [];
+  const showSubCategoryField = type === 'cashbook' && !!form.type;
 
   const validate = () => {
     if (showAmount[type] && !form.amount) return 'Please enter an amount.';
@@ -102,6 +127,7 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
         // Only ever set for Type=PROJECT entries - see isProjectType below -
         // so this money counts toward that project's spend alongside Vendors bills.
         project: form.type === 'PROJECT' ? form.project : '',
+        subCategory: form.subCategory || '',
       };
     } else if (type === 'vendors') {
       payload = {
@@ -188,11 +214,30 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
             <>
               <Dropdown label="Account" options={lists.accounts} value={form.account} onChange={(v) => set('account', v)}
                 onAddNew={onAddListItem ? (v) => onAddListItem('accounts', v) : undefined} />
-              <Dropdown label="Type" options={lists.types} value={form.type} onChange={(v) => set('type', v)}
-                onAddNew={onAddListItem ? (v) => onAddListItem('types', v) : undefined} />
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <Dropdown label="Type" options={orderedTypeOptions} value={form.type} onChange={(v) => set('type', v)}
+                    onAddNew={onAddListItem ? (v) => onAddListItem('types', v) : undefined} />
+                </div>
+                {form.account && form.type && onToggleFavorite && (
+                  <button
+                    onClick={() => onToggleFavorite(form.account, form.type)}
+                    disabled={busy}
+                    title={isFavoriteType ? `Unpin ${form.type} from ${form.account}` : `Pin ${form.type} for ${form.account}`}
+                    className={`shrink-0 mb-0.5 p-2 rounded-lg border ${isFavoriteType ? 'text-amber-500 border-amber-300 bg-amber-50' : 'text-gray-300 border-gray-200'}`}
+                  >
+                    <Star size={18} fill={isFavoriteType ? 'currentColor' : 'none'} />
+                  </button>
+                )}
+              </div>
               {showProjectField && (
                 <Dropdown label="Project" options={lists.projects} value={form.project} onChange={(v) => set('project', v)}
                   onAddNew={onAddListItem ? (v) => onAddListItem('projects', v) : undefined} />
+              )}
+              {showSubCategoryField && (
+                <Dropdown label="Sub-category (optional)" options={subCategoryOptions} value={form.subCategory}
+                  onChange={(v) => set('subCategory', v)}
+                  onAddNew={onAddSubCategory ? (v) => onAddSubCategory(form.type, v) : undefined} />
               )}
             </>
           )}

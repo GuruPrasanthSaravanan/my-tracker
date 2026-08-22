@@ -249,6 +249,97 @@ export function computeMonthSurplus(rows, month) {
 }
 
 /**
+ * Counts how many times each Type has been used with a given Account in
+ * CashBook history, most-used first - the "auto-learned" half of the
+ * Account -> Type ordering (see `orderTypeOptionsForAccount`).
+ * @param {string[][]} rows - CashBook rows [Date, Desc, Account, Type, ...]
+ * @param {string} account
+ * @returns {Map<string, number>} Type -> usage count, insertion-ordered by descending count
+ */
+export function computeTypeFrequencyForAccount(rows, account) {
+  const counts = new Map();
+  for (const row of rows) {
+    if ((row[2] || '') !== account) continue;
+    const type = row[3] || '';
+    if (!type) continue;
+    counts.set(type, (counts.get(type) || 0) + 1);
+  }
+  return new Map([...counts.entries()].sort((a, b) => b[1] - a[1]));
+}
+
+/**
+ * Orders the Type dropdown for a selected Account as: (1) Types explicitly
+ * pinned as favorites for this account, (2) Types historically used with
+ * this account, most-frequent first, (3) every other Type, in its original
+ * order - so nothing is ever hidden or hard-filtered, just reordered to put
+ * the most relevant options within thumb's reach first. Degrades gracefully
+ * for a brand-new account with no history/favorites yet (returns the
+ * original list untouched).
+ * @param {string[]} allTypes - the full Types list (e.g. from Lists tab)
+ * @param {string[][]} cashBookRows
+ * @param {string} account
+ * @param {string[]} favoriteTypes - Types pinned as favorites for this account
+ * @returns {string[]}
+ */
+export function orderTypeOptionsForAccount(allTypes, cashBookRows, account, favoriteTypes = []) {
+  if (!account) return allTypes;
+  const frequency = computeTypeFrequencyForAccount(cashBookRows, account);
+  const seen = new Set();
+  const ordered = [];
+
+  for (const t of favoriteTypes) {
+    if (allTypes.includes(t) && !seen.has(t)) { ordered.push(t); seen.add(t); }
+  }
+  for (const t of frequency.keys()) {
+    if (allTypes.includes(t) && !seen.has(t)) { ordered.push(t); seen.add(t); }
+  }
+  for (const t of allTypes) {
+    if (!seen.has(t)) { ordered.push(t); seen.add(t); }
+  }
+  return ordered;
+}
+
+/**
+ * Type-level spending breakdown (Money OUT only - "where did my money go")
+ * for a given month, for the Monthly page's pie chart.
+ * @param {string[][]} rows - CashBook rows [Date, Desc, Account, Type, IN, OUT]
+ * @param {string} month - "YYYY-MM"
+ * @returns {Map<string, number>} Type -> total Money OUT for that month
+ */
+export function computeTypeSpendBreakdown(rows, month) {
+  const result = new Map();
+  for (const row of rows) {
+    if (!(row[0] || '').startsWith(month)) continue;
+    const moneyOut = parseFloat(row[5]) || 0;
+    if (moneyOut <= 0) continue;
+    const type = row[3] || '(none)';
+    result.set(type, (result.get(type) || 0) + moneyOut);
+  }
+  return result;
+}
+
+/**
+ * Sub-category spending breakdown (Money OUT only) within one Type, for a
+ * given month - the pie chart's drill-down view.
+ * @param {string[][]} rows - CashBook rows [..., Type(3), IN(4), OUT(5), Project(6), SubCategory(7)]
+ * @param {string} month - "YYYY-MM"
+ * @param {string} type - the Type to drill into
+ * @returns {Map<string, number>} SubCategory -> total Money OUT (uses "(uncategorized)" for entries with no sub-category)
+ */
+export function computeSubCategorySpendBreakdown(rows, month, type) {
+  const result = new Map();
+  for (const row of rows) {
+    if (!(row[0] || '').startsWith(month)) continue;
+    if ((row[3] || '') !== type) continue;
+    const moneyOut = parseFloat(row[5]) || 0;
+    if (moneyOut <= 0) continue;
+    const subCategory = row[7] || '(uncategorized)';
+    result.set(subCategory, (result.get(subCategory) || 0) + moneyOut);
+  }
+  return result;
+}
+
+/**
  * Projects a credit card's upcoming bill from CashBook activity, by treating
  * the card as a "virtual account" - every purchase on the card is logged as
  * a normal CashBook entry with Account = the card's exact name (Money Out for

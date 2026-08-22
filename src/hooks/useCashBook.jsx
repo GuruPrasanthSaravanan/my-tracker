@@ -17,7 +17,10 @@ export function useCashBook() {
       // later phase - see docs/superpowers/mytracker-bugs-and-lessons.md §6.10.
       // Column G (Project) is optional - only set for Type=PROJECT entries, so
       // a project's spend can be tracked directly from CashBook, not just Vendors.
-      const data = await readSheet(token, 'CashBook!A2:G5000');
+      // Column H (SubCategory) is optional - a finer-grained tag scoped to
+      // whichever Type is selected (e.g. Type=WANTS -> SubCategory=Dining),
+      // for the Monthly spending breakdown pie chart.
+      const data = await readSheet(token, 'CashBook!A2:H5000');
       setRows(data);
     } catch (err) {
       console.error('Failed to fetch CashBook:', err);
@@ -31,9 +34,9 @@ export function useCashBook() {
   const addEntry = useCallback(async (entry) => {
     const values = [
       entry.date, entry.description, entry.account, entry.type,
-      entry.moneyIn || '', entry.moneyOut || '', entry.project || '',
+      entry.moneyIn || '', entry.moneyOut || '', entry.project || '', entry.subCategory || '',
     ];
-    await appendRowAt(token, 'CashBook', 'G', rows.length, values);
+    await appendRowAt(token, 'CashBook', 'H', rows.length, values);
     await fetchData();
   }, [token, fetchData, rows]);
 
@@ -41,15 +44,15 @@ export function useCashBook() {
     const sheetRow = rowIndex + 2; // +2 because row 1 is header, data starts at row 2
     const values = [
       entry.date, entry.description, entry.account, entry.type,
-      entry.moneyIn || '', entry.moneyOut || '', entry.project || '',
+      entry.moneyIn || '', entry.moneyOut || '', entry.project || '', entry.subCategory || '',
     ];
-    await updateRow(token, `CashBook!A${sheetRow}:G${sheetRow}`, values);
+    await updateRow(token, `CashBook!A${sheetRow}:H${sheetRow}`, values);
     await fetchData();
   }, [token, fetchData]);
 
   const deleteEntry = useCallback(async (rowIndex) => {
     const sheetRow = rowIndex + 2;
-    await clearRow(token, `CashBook!A${sheetRow}:G${sheetRow}`);
+    await clearRow(token, `CashBook!A${sheetRow}:H${sheetRow}`);
     await fetchData();
   }, [token, fetchData]);
 

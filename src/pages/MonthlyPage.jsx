@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useAppData } from '../contexts/DataContext';
-import { computeMonthlyActuals, computeActualForPlan } from '../utils/aggregations';
+import { computeMonthlyActuals, computeActualForPlan, computeTypeSpendBreakdown, computeSubCategorySpendBreakdown } from '../utils/aggregations';
 import { formatCurrency, getTodayISO } from '../utils/formatters';
 import Dropdown from '../components/Dropdown';
+import PieChart from '../components/PieChart';
 import Toast from '../components/Toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
-import { ChevronLeft, ChevronRight, Plus, X, Trash2, Settings2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, Settings2, ArrowLeft } from 'lucide-react';
 
 const SECTIONS = ['Income', 'My Outflows', 'Wife Outflows', 'Projects'];
 
@@ -199,6 +200,7 @@ export default function MonthlyPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null);
   const [showTemplate, setShowTemplate] = useState(false);
+  const [drillIntoType, setDrillIntoType] = useState(null);
   const [toast, setToast] = useState(null);
   const notify = (message, type = 'success') => setToast({ message, type });
 
@@ -222,6 +224,16 @@ export default function MonthlyPage() {
 
   const totalPlanned = monthPlans.reduce((sum, p) => sum + p.plannedAmount, 0);
   const totalActual = monthPlans.reduce((sum, p) => sum + actualForPlan(p), 0);
+
+  // Spending breakdown pie chart: Type-level by default, drills into a
+  // Type's Sub-categories when one is selected (e.g. tap "WANTS" to see
+  // Dining vs Shopping vs Entertainment).
+  const typeBreakdown = computeTypeSpendBreakdown(cashBook.rows, month);
+  const subCategoryBreakdown = drillIntoType ? computeSubCategorySpendBreakdown(cashBook.rows, month, drillIntoType) : null;
+  const pieData = (drillIntoType ? subCategoryBreakdown : typeBreakdown);
+  const pieChartData = Array.from(pieData?.entries() || [])
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
 
   const handleSave = async (entry) => {
     try {
@@ -305,6 +317,26 @@ export default function MonthlyPage() {
           <p className="text-xs text-gray-500">Total Actual</p>
           <p className="text-lg font-bold text-gray-900">{formatCurrency(totalActual)}</p>
         </div>
+      </div>
+
+      {/* Spending breakdown: Type-level pie by default, drills into a Type's
+          Sub-categories when one is tapped. */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
+        <div className="flex items-center gap-2 mb-2">
+          {drillIntoType && (
+            <button onClick={() => setDrillIntoType(null)} className="text-gray-400"><ArrowLeft size={16} /></button>
+          )}
+          <h2 className="text-sm font-semibold text-gray-500">
+            {drillIntoType ? `${drillIntoType} - by Sub-category` : 'Spending Breakdown'}
+          </h2>
+        </div>
+        <PieChart
+          data={pieChartData}
+          onSliceClick={drillIntoType ? undefined : (label) => setDrillIntoType(label)}
+        />
+        {!drillIntoType && pieChartData.length > 0 && (
+          <p className="text-xs text-gray-400 mt-2">Tap a category to see its sub-category breakdown.</p>
+        )}
       </div>
 
       {!hasPlans && previousMonthPlans.length > 0 && (

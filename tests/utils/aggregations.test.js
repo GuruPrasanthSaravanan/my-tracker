@@ -3,6 +3,7 @@ import {
   sumByField, computeVendorBalances, computeAccountBalances, computeProjectSpent, computeCashBookSpendForAccount,
   computeCashBookProjectSpend, computeCombinedProjectSpend,
   computeMonthlyActuals, computeActualForPlan, computeMonthSurplus, hasEMIBeenLoggedForMonth, computeUpcomingEMIFundingWarnings,
+  computeTypeFrequencyForAccount, orderTypeOptionsForAccount, computeTypeSpendBreakdown, computeSubCategorySpendBreakdown,
 } from '../../src/utils/aggregations';
 
 describe('sumByField', () => {
@@ -309,6 +310,78 @@ describe('computeCashBookSpendForAccount', () => {
     const result = computeCashBookSpendForAccount(messyRows, 'Card', null, '2026-08-31');
     expect(result.spend).toBe(3000);
     expect(result.transactionCount).toBe(1);
+  });
+});
+
+describe('computeTypeFrequencyForAccount', () => {
+  it('counts Type usage for a given account, most-used first', () => {
+    const rows = [
+      ['2026-09-01', 'a', 'HDFC', 'EMI', '', '21000'],
+      ['2026-09-02', 'b', 'HDFC', 'EMI', '', '21000'],
+      ['2026-09-03', 'c', 'HDFC', 'VENDOR', '', '5000'],
+      ['2026-09-04', 'd', 'ICICI', 'SALARY', '153000', ''],
+    ];
+    const freq = computeTypeFrequencyForAccount(rows, 'HDFC');
+    expect([...freq.entries()]).toEqual([['EMI', 2], ['VENDOR', 1]]);
+    expect(computeTypeFrequencyForAccount(rows, 'AXIS').size).toBe(0);
+  });
+});
+
+describe('orderTypeOptionsForAccount', () => {
+  const allTypes = ['SALARY', 'EMI', 'VENDOR', 'PROJECT', 'FAMILY'];
+  const rows = [
+    ['2026-09-01', 'a', 'HDFC', 'PROJECT', '', '30000'],
+    ['2026-09-02', 'b', 'HDFC', 'PROJECT', '', '10000'],
+    ['2026-09-03', 'c', 'HDFC', 'VENDOR', '', '5000'],
+  ];
+
+  it('returns the original list untouched when no account is selected yet', () => {
+    expect(orderTypeOptionsForAccount(allTypes, rows, '')).toEqual(allTypes);
+  });
+
+  it('puts favorites first, then history by frequency, then everything else in original order', () => {
+    const ordered = orderTypeOptionsForAccount(allTypes, rows, 'HDFC', ['FAMILY']);
+    expect(ordered).toEqual(['FAMILY', 'PROJECT', 'VENDOR', 'SALARY', 'EMI']);
+  });
+
+  it('never drops or duplicates a type, and degrades to the original list for a brand-new account', () => {
+    const ordered = orderTypeOptionsForAccount(allTypes, rows, 'BRAND-NEW-ACCOUNT');
+    expect(ordered).toEqual(allTypes);
+    expect(new Set(orderTypeOptionsForAccount(allTypes, rows, 'HDFC', ['FAMILY'])).size).toBe(allTypes.length);
+  });
+});
+
+describe('computeTypeSpendBreakdown', () => {
+  it('sums Money OUT per Type for a given month, ignoring Money IN rows', () => {
+    const rows = [
+      ['2026-09-01', 'Salary', 'ICICI', 'SALARY', '153000', ''],
+      ['2026-09-05', 'EMI', 'HDFC', 'EMI', '', '21000'],
+      ['2026-09-06', 'Groceries', 'ICICI', 'FAMILY', '', '8000'],
+      ['2026-09-07', 'More groceries', 'ICICI', 'FAMILY', '', '2000'],
+      ['2026-10-01', 'Next month EMI', 'HDFC', 'EMI', '', '21000'],
+    ];
+    const breakdown = computeTypeSpendBreakdown(rows, '2026-09');
+    expect(breakdown.get('EMI')).toBe(21000); // not 42000 - October's EMI must not leak in
+    expect(breakdown.get('FAMILY')).toBe(10000);
+    expect(breakdown.has('SALARY')).toBe(false); // it's Money IN, not an outflow
+  });
+});
+
+describe('computeSubCategorySpendBreakdown', () => {
+  const rows = [
+    ['2026-09-01', 'Dinner out', 'ICICI', 'WANTS', '', '2000', '', 'Dining'],
+    ['2026-09-02', 'Movie', 'ICICI', 'WANTS', '', '1000', '', 'Entertainment'],
+    ['2026-09-03', 'More dinner', 'ICICI', 'WANTS', '', '1500', '', 'Dining'],
+    ['2026-09-04', 'Unlabeled want', 'ICICI', 'WANTS', '', '500', '', ''],
+    ['2026-09-05', 'EMI', 'HDFC', 'EMI', '', '21000', '', ''],
+  ];
+
+  it('sums Money OUT per sub-category within a specific Type/month', () => {
+    const breakdown = computeSubCategorySpendBreakdown(rows, '2026-09', 'WANTS');
+    expect(breakdown.get('Dining')).toBe(3500);
+    expect(breakdown.get('Entertainment')).toBe(1000);
+    expect(breakdown.get('(uncategorized)')).toBe(500);
+    expect(breakdown.has('EMI')).toBe(false);
   });
 });
 
