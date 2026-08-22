@@ -202,11 +202,19 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
           )}
         </div>
 
-        {/* Add Expense Button */}
-        <button onClick={onAddExpense}
-          className="w-full flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-xl font-semibold text-sm mb-4">
-          <Plus size={18} /> Add Expense to {project.code}
-        </button>
+        {/* Add Expense Buttons - Vendor expense (goes through the Vendors
+            ledger, requires picking a Vendor) vs Direct expense (a plain
+            CashBook entry tagged Type=PROJECT, no Vendor needed) */}
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <button onClick={() => onAddExpense('vendor')}
+            className="flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-xl font-semibold text-sm">
+            <Plus size={18} /> Vendor Expense
+          </button>
+          <button onClick={() => onAddExpense('direct')}
+            className="flex items-center justify-center gap-2 bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold text-sm">
+            <Plus size={18} /> Direct Expense
+          </button>
+        </div>
 
         {/* Recent Expenses (combines Vendors bills + CashBook entries tagged with this project) */}
         {combinedExpenses.length > 0 && (

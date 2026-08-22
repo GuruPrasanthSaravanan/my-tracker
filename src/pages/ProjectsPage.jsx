@@ -10,13 +10,13 @@ import EntryForm from '../components/EntryForm';
 import { formatCurrency, getTodayISO } from '../utils/formatters';
 
 export default function ProjectsPage() {
-  const { projects: projectsData, vendors, cashBook, lists: listsData } = useAppData();
+  const { projects: projectsData, vendors, cashBook, lists: listsData, accountTypeFavorites, subCategories } = useAppData();
   const { projects, milestones, isLoading, addProject, editProject, addMilestone, refresh: refreshProjects } = projectsData;
   const { rows: vendorRows, addEntry: addVendorEntry, refresh: refreshVendors } = vendors;
   const { lists, addListItem } = listsData;
   const projectSpent = (code) => computeCombinedProjectSpend(vendorRows, cashBook.rows, code);
   const [selectedProject, setSelectedProject] = useState(null);
-  const [showForm, setShowForm] = useState(null); // null | 'project' | 'milestone' | 'expense'
+  const [showForm, setShowForm] = useState(null); // null | 'project' | 'milestone' | 'vendor-expense' | 'direct-expense'
   const [toast, setToast] = useState(null);
 
   const handleSaveProject = async (entry) => {
@@ -51,7 +51,7 @@ export default function ProjectsPage() {
     }
   };
 
-  const handleSaveExpense = async (entry) => {
+  const handleSaveVendorExpense = async (entry) => {
     try {
       await addVendorEntry({
         ...entry,
@@ -59,6 +59,19 @@ export default function ProjectsPage() {
       });
       setShowForm(null);
       await refreshVendors();
+      setToast({ message: 'Expense saved!', type: 'success' });
+    } catch {
+      setToast({ message: 'Failed to save.', type: 'error' });
+    }
+  };
+
+  // A "Direct Expense" is a plain CashBook entry tagged Type=PROJECT (see
+  // bugs-and-lessons.md §17.3) - no Vendor required, for money spent on the
+  // project that isn't tied to a specific vendor bill/payment.
+  const handleSaveDirectExpense = async (entry) => {
+    try {
+      await cashBook.addEntry(entry);
+      setShowForm(null);
       setToast({ message: 'Expense saved!', type: 'success' });
     } catch {
       setToast({ message: 'Failed to save.', type: 'error' });
@@ -108,7 +121,7 @@ export default function ProjectsPage() {
           vendorRows={vendorRows}
           cashBookRows={cashBook.rows}
           onAddMilestone={() => setShowForm('milestone')}
-          onAddExpense={() => setShowForm('expense')}
+          onAddExpense={(mode) => setShowForm(mode === 'vendor' ? 'vendor-expense' : 'direct-expense')}
           onEditProject={handleEditProject}
           onClose={() => setSelectedProject(null)}
         />
@@ -135,7 +148,7 @@ export default function ProjectsPage() {
         />
       )}
 
-      {showForm === 'expense' && (
+      {showForm === 'vendor-expense' && (
         <EntryForm
           type="vendors"
           lists={lists}
@@ -148,8 +161,33 @@ export default function ProjectsPage() {
             amount: '',
             direction: 'in',
           }}
-          onSave={handleSaveExpense}
+          onSave={handleSaveVendorExpense}
           onClose={() => setShowForm(null)}
+        />
+      )}
+
+      {showForm === 'direct-expense' && (
+        <EntryForm
+          type="cashbook"
+          lists={lists}
+          onAddListItem={addListItem}
+          initialData={{
+            date: getTodayISO(),
+            description: '',
+            account: '',
+            type: 'PROJECT',
+            project: selectedProject?.code || '',
+            subCategory: '',
+            amount: '',
+            direction: 'out',
+          }}
+          onSave={handleSaveDirectExpense}
+          onClose={() => setShowForm(null)}
+          cashBookRows={cashBook.rows}
+          favoritesForAccount={accountTypeFavorites.favoritesForAccount}
+          onToggleFavorite={accountTypeFavorites.toggleFavorite}
+          subCategoriesForType={subCategories.subCategoriesForType}
+          onAddSubCategory={subCategories.addSubCategory}
         />
       )}
 
