@@ -4,6 +4,7 @@ import {
   computeMonthlyActuals, computeActualForPlan, computeActualForTransferPlan,
   computeTypeSpendBreakdown, computeSubCategorySpendBreakdown, computePlannedBreakdown,
   computeAccountSpendBreakdown, computeTypeSpendBreakdownForAccount, computeAccountSpendBreakdownForType,
+  findNearMissForZeroActual,
 } from '../utils/aggregations';
 import { formatCurrency, getTodayISO, shiftMonth, monthLabel } from '../utils/formatters';
 import Dropdown from '../components/Dropdown';
@@ -11,7 +12,7 @@ import PieChart from '../components/PieChart';
 import BarChart from '../components/BarChart';
 import Toast from '../components/Toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
-import { ChevronLeft, ChevronRight, Plus, X, Trash2, Settings2, ArrowLeft, Download } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, Settings2, ArrowLeft, Download, AlertTriangle } from 'lucide-react';
 
 const SECTIONS = ['Income', 'My Outflows', 'Wife Outflows', 'Projects'];
 
@@ -604,12 +605,27 @@ export default function MonthlyPage() {
                   // meaningless "over/under" color for an outflow category.
                   const actualMagnitude = Math.abs(actualForPlan(p));
                   const isOverPlanned = actualMagnitude > p.plannedAmount;
+                  // Diagnostic-only hint for a ₹0 Actual - checks (without
+                  // changing the real exact-match computation, see
+                  // findNearMissForZeroActual) whether a case/whitespace-only
+                  // variant of this Category/Account was actually used this
+                  // month, e.g. "W-Kotak" entered instead of the plan's
+                  // "W-KOTAK" - the likely cause flagged in bugs-and-lessons.md §36.
+                  const nearMiss = actualMagnitude === 0 && p.category !== 'TRANSFER'
+                    ? findNearMissForZeroActual(cashBook.rows, month, p.category, p.account)
+                    : null;
                   return (
                     <button key={p._rowIndex} onClick={() => { setEditingPlan(p); setShowForm(true); }}
                       className="w-full flex items-center justify-between px-3 py-2.5 border-b border-gray-100 last:border-0 text-left active:bg-gray-50">
                       <div>
                         <span className="text-sm text-gray-900">{p.category}</span>
                         {accountLabel(p) && <p className="text-xs text-gray-400">{accountLabel(p)}</p>}
+                        {nearMiss && (
+                          <p className="text-xs text-amber-600 flex items-center gap-1 mt-0.5 max-w-[160px]">
+                            <AlertTriangle size={11} className="shrink-0" />
+                            Found "{nearMiss.category}" / "{nearMiss.account}" - check spelling?
+                          </p>
+                        )}
                       </div>
                       <div className="text-right text-xs">
                         <p className="text-gray-500">Plan: {formatCurrency(p.plannedAmount)}</p>

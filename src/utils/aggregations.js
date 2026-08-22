@@ -231,6 +231,48 @@ export function computeActualForPlan(rows, month, category, account) {
 }
 
 /**
+ * Diagnostic-only helper for a Monthly Plan whose Actual came back 0 for
+ * the month: looks for a CashBook row that *would* have matched if
+ * Category and/or Account were compared case/whitespace-insensitively
+ * instead of the app's normal exact-match comparison - a hint that the
+ * ₹0 is a likely typo/case-drift (e.g. "W-Kotak" entered instead of the
+ * plan's "W-KOTAK") rather than genuinely no spend yet this month.
+ *
+ * Deliberately does NOT change how Actual itself is computed - exact-match
+ * string keys are a deliberate, documented invariant across this app
+ * (loosening it risks silently merging genuinely-different values, see
+ * bugs-and-lessons.md discussion) - this only ever *reports* a possible
+ * near-match for the user to go verify/correct themselves.
+ * @param {string[][]} rows - CashBook rows [Date, Desc, Account(2), Type(3), IN, OUT]
+ * @param {string} month - "YYYY-MM"
+ * @param {string} category - the Plan's Category (matches CashBook Type)
+ * @param {string} [account] - the Plan's optional Account narrowing
+ * @returns {{ category: string, account: string } | null} the near-matching
+ *   row's actual Type/Account as recorded, or null if nothing close was found
+ */
+export function findNearMissForZeroActual(rows, month, category, account) {
+  const norm = (s) => (s || '').trim().toLowerCase();
+  const catNorm = norm(category);
+  const accNorm = account ? norm(account) : null;
+
+  for (const row of rows) {
+    if (!(row[0] || '').startsWith(month)) continue;
+    const rowType = row[3] || '';
+    const rowAccount = row[2] || '';
+
+    // An exact match on both would mean Actual wasn't really 0 - not our case, skip.
+    if (rowType === category && (!account || rowAccount === account)) continue;
+
+    const typeCloseMatch = norm(rowType) === catNorm;
+    const accountCloseMatch = !accNorm || norm(rowAccount) === accNorm;
+    if (typeCloseMatch && accountCloseMatch) {
+      return { category: rowType, account: rowAccount };
+    }
+  }
+  return null;
+}
+
+/**
  * Actual amount transferred for a Monthly Plan that explicitly plans a
  * specific "From Account -> To Account" transfer (e.g. "move ₹10,000 from
  * ICICI to AXIS" for a wants allowance), rather than just narrowing to one

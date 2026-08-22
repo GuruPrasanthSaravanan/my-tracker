@@ -6,6 +6,7 @@ import {
   hasEMIBeenLoggedForMonth, computeUpcomingEMIFundingWarnings,
   computeTypeFrequencyForAccount, orderTypeOptionsForAccount, computeTypeSpendBreakdown, computeSubCategorySpendBreakdown,
   computePlannedBreakdown, computeAccountSpendBreakdown, computeTypeSpendBreakdownForAccount, computeAccountSpendBreakdownForType,
+  findNearMissForZeroActual,
 } from '../../src/utils/aggregations';
 
 describe('sumByField', () => {
@@ -463,6 +464,53 @@ describe('computeAccountSpendBreakdown / computeTypeSpendBreakdownForAccount / c
     expect(breakdown.has('ICICI')).toBe(false);
     // October's EMI on HDFC must not leak into September's breakdown
     expect(breakdown.get('HDFC')).not.toBe(42000);
+  });
+});
+
+describe('findNearMissForZeroActual', () => {
+  it('finds a case-only Account variant that would have matched', () => {
+    const rows = [
+      ['2026-09-05', 'Kids stuff', 'W-Kotak', 'Kids', '', '2000'],
+    ];
+    expect(findNearMissForZeroActual(rows, '2026-09', 'Kids', 'W-KOTAK'))
+      .toEqual({ category: 'Kids', account: 'W-Kotak' });
+  });
+
+  it('finds a whitespace-only Category variant that would have matched', () => {
+    const rows = [
+      ['2026-09-05', 'Kids stuff', 'W-KOTAK', 'Kids ', '', '2000'],
+    ];
+    expect(findNearMissForZeroActual(rows, '2026-09', 'Kids', 'W-KOTAK'))
+      .toEqual({ category: 'Kids ', account: 'W-KOTAK' });
+  });
+
+  it('returns null when nothing this month is even a close match', () => {
+    const rows = [
+      ['2026-09-05', 'Groceries', 'CASH', 'FAMILY', '', '2000'],
+    ];
+    expect(findNearMissForZeroActual(rows, '2026-09', 'Kids', 'W-KOTAK')).toBeNull();
+  });
+
+  it('returns null when an exact match already exists (Actual would not really be 0)', () => {
+    const rows = [
+      ['2026-09-05', 'Kids stuff', 'W-KOTAK', 'Kids', '', '2000'],
+    ];
+    expect(findNearMissForZeroActual(rows, '2026-09', 'Kids', 'W-KOTAK')).toBeNull();
+  });
+
+  it('ignores entries from other months', () => {
+    const rows = [
+      ['2026-08-05', 'Kids stuff', 'W-Kotak', 'Kids', '', '2000'],
+    ];
+    expect(findNearMissForZeroActual(rows, '2026-09', 'Kids', 'W-KOTAK')).toBeNull();
+  });
+
+  it('works with no account specified on the plan (Type-only near-match)', () => {
+    const rows = [
+      ['2026-09-05', 'Misc', 'CASH', 'misc', '', '2000'],
+    ];
+    expect(findNearMissForZeroActual(rows, '2026-09', 'MISC'))
+      .toEqual({ category: 'misc', account: 'CASH' });
   });
 });
 
