@@ -340,6 +340,25 @@ export default function MonthlyPage() {
   const totalPlanned = monthPlans.reduce((sum, p) => sum + p.plannedAmount, 0);
   const totalActual = monthPlans.reduce((sum, p) => sum + actualForPlan(p), 0);
 
+  // Savings = Income - Outflow, excluding TRANSFER plans entirely - a
+  // self-transfer between your own accounts is neither income nor an
+  // expense, it just moves money around, so counting it here would
+  // overstate both sides (and roughly cancel out anyway, but only by
+  // coincidence when amounts match, not reliably). This is the number
+  // that answers "how much can I actually commit toward a repayment or
+  // project this month" - unlike Total Planned/Actual above, which just
+  // sums every plan's positive plannedAmount regardless of Income vs
+  // Outflow direction and isn't meant to represent a net figure.
+  const isRealFlow = (p) => p.category !== 'TRANSFER';
+  const incomePlans = monthPlans.filter((p) => p.section === 'Income' && isRealFlow(p));
+  const outflowPlans = monthPlans.filter((p) => p.section !== 'Income' && isRealFlow(p));
+  const plannedIncome = incomePlans.reduce((sum, p) => sum + p.plannedAmount, 0);
+  const plannedOutflow = outflowPlans.reduce((sum, p) => sum + p.plannedAmount, 0);
+  const plannedSavings = plannedIncome - plannedOutflow;
+  const actualIncome = incomePlans.reduce((sum, p) => sum + actualForPlan(p), 0);
+  const actualOutflow = outflowPlans.reduce((sum, p) => sum + Math.abs(actualForPlan(p)), 0);
+  const actualSavings = actualIncome - actualOutflow;
+
   // Actual spending breakdown pie chart - top level is either Type (e.g.
   // tap "WANTS" to see Dining vs Shopping vs Entertainment) or Account
   // (e.g. tap "W-HDFC" to see which Types its spend went to), and a Type
@@ -478,6 +497,19 @@ export default function MonthlyPage() {
         <button onClick={() => setMonth(shiftMonth(month, -1))} className="p-2"><ChevronLeft size={20} /></button>
         <h1 className="text-lg font-bold text-gray-900">{monthLabel(month)}</h1>
         <button onClick={() => setMonth(shiftMonth(month, 1))} className="p-2"><ChevronRight size={20} /></button>
+      </div>
+
+      {/* Savings = Income - Outflow, excluding transfers between your own
+          accounts - the figure to actually plan a repayment/project
+          commitment against, as opposed to Total Planned/Actual below
+          which just sum every plan's positive amount regardless of
+          direction. */}
+      <div className={`rounded-2xl p-4 mb-4 text-white ${plannedSavings >= 0 ? 'bg-primary' : 'bg-danger'}`}>
+        <p className="text-xs opacity-80">Planned Savings (Income − Outflow, excl. transfers)</p>
+        <p className="text-2xl font-bold">{formatCurrency(plannedSavings)}</p>
+        <p className="text-xs opacity-80 mt-1">
+          Actual so far: {formatCurrency(actualSavings)} ({formatCurrency(actualIncome)} in − {formatCurrency(actualOutflow)} out)
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 mb-4">
