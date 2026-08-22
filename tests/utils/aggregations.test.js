@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   sumByField, computeVendorBalances, computeAccountBalances, computeProjectSpent, computeCashBookSpendForAccount,
   computeCashBookProjectSpend, computeCombinedProjectSpend,
-  computeMonthlyActuals, computeActualForPlan, computeMonthSurplus, hasEMIBeenLoggedForMonth, computeUpcomingEMIFundingWarnings,
+  computeMonthlyActuals, computeActualForPlan, computeActualForTransferPlan, computeMonthSurplus,
+  hasEMIBeenLoggedForMonth, computeUpcomingEMIFundingWarnings,
   computeTypeFrequencyForAccount, orderTypeOptionsForAccount, computeTypeSpendBreakdown, computeSubCategorySpendBreakdown,
 } from '../../src/utils/aggregations';
 
@@ -127,6 +128,53 @@ describe('computeActualForPlan', () => {
   it('returns 0 for a category/account/month combination with no matches', () => {
     expect(computeActualForPlan(rows, '2026-09', 'EMI', 'AXIS')).toBe(0);
     expect(computeActualForPlan(rows, '2026-11', 'EMI', 'HDFC')).toBe(0);
+  });
+});
+
+describe('computeActualForTransferPlan', () => {
+  it('pairs a Money OUT leg with its matching Money IN leg by date+description+amount', () => {
+    const rows = [
+      ['2026-09-05', 'Transfer: ICICI to AXIS', 'ICICI', 'TRANSFER', '', '10000'],
+      ['2026-09-05', 'Transfer: ICICI to AXIS', 'AXIS', 'TRANSFER', '10000', ''],
+    ];
+    expect(computeActualForTransferPlan(rows, '2026-09', 'ICICI', 'AXIS')).toBe(10000);
+  });
+
+  it('sums multiple distinct transfers between the same pair in a month', () => {
+    const rows = [
+      ['2026-09-05', 'Wants allowance', 'ICICI', 'TRANSFER', '', '10000'],
+      ['2026-09-05', 'Wants allowance', 'AXIS', 'TRANSFER', '10000', ''],
+      ['2026-09-20', 'Top-up', 'ICICI', 'TRANSFER', '', '2000'],
+      ['2026-09-20', 'Top-up', 'AXIS', 'TRANSFER', '2000', ''],
+    ];
+    expect(computeActualForTransferPlan(rows, '2026-09', 'ICICI', 'AXIS')).toBe(12000);
+  });
+
+  it('does not double-count when there are duplicate-looking legs - pairs one-to-one', () => {
+    const rows = [
+      ['2026-09-05', 'Wants allowance', 'ICICI', 'TRANSFER', '', '10000'],
+      ['2026-09-05', 'Wants allowance', 'ICICI', 'TRANSFER', '', '10000'],
+      ['2026-09-05', 'Wants allowance', 'AXIS', 'TRANSFER', '10000', ''],
+    ];
+    // Two identical "from" legs but only one matching "to" leg - only one pair should match.
+    expect(computeActualForTransferPlan(rows, '2026-09', 'ICICI', 'AXIS')).toBe(10000);
+  });
+
+  it('ignores an unmatched leg (e.g. a transfer to a different account) and unrelated transactions', () => {
+    const rows = [
+      ['2026-09-05', 'Wants allowance', 'ICICI', 'TRANSFER', '', '10000'],
+      ['2026-09-05', 'Wants allowance', 'HDFC', 'TRANSFER', '10000', ''], // different destination
+      ['2026-09-06', 'Groceries', 'ICICI', 'FAMILY', '', '3000'], // not a transfer at all
+    ];
+    expect(computeActualForTransferPlan(rows, '2026-09', 'ICICI', 'AXIS')).toBe(0);
+  });
+
+  it('excludes transfers from other months', () => {
+    const rows = [
+      ['2026-08-05', 'Wants allowance', 'ICICI', 'TRANSFER', '', '10000'],
+      ['2026-08-05', 'Wants allowance', 'AXIS', 'TRANSFER', '10000', ''],
+    ];
+    expect(computeActualForTransferPlan(rows, '2026-09', 'ICICI', 'AXIS')).toBe(0);
   });
 });
 

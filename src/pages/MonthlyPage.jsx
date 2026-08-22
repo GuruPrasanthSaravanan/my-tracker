@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useAppData } from '../contexts/DataContext';
-import { computeMonthlyActuals, computeActualForPlan, computeTypeSpendBreakdown, computeSubCategorySpendBreakdown } from '../utils/aggregations';
+import {
+  computeMonthlyActuals, computeActualForPlan, computeActualForTransferPlan,
+  computeTypeSpendBreakdown, computeSubCategorySpendBreakdown,
+} from '../utils/aggregations';
 import { formatCurrency, getTodayISO } from '../utils/formatters';
 import Dropdown from '../components/Dropdown';
 import PieChart from '../components/PieChart';
@@ -21,17 +24,24 @@ function monthLabel(month) {
   return new Date(y, m - 1, 1).toLocaleString('en', { month: 'long', year: 'numeric' });
 }
 
+/** "ICICI -> AXIS" for a Transfer plan with both sides set, else just the (From) account, else nothing. */
+function accountLabel(item) {
+  if (item.account && item.toAccount) return `${item.account} \u2192 ${item.toAccount}`;
+  return item.account || '';
+}
+
 function PlanForm({
   initial, month, categoryOptions, onAddCategory, accountOptions, onAddAccount,
   onSave, onDelete, onClose, title = 'Planned Category',
 }) {
-  const [form, setForm] = useState(initial || { category: '', plannedAmount: '', section: SECTIONS[1], account: '' });
+  const [form, setForm] = useState(initial || { category: '', plannedAmount: '', section: SECTIONS[1], account: '', toAccount: '' });
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState('');
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
   const busy = isSaving || isDeleting;
+  const isTransfer = form.category === 'TRANSFER';
 
   const handleSubmit = async () => {
     if (busy) return;
@@ -87,16 +97,33 @@ function PlanForm({
             </select>
           </div>
           <Dropdown
-            label="Account (optional)"
+            label={isTransfer ? 'From Account (optional)' : 'Account (optional)'}
             options={accountOptions || []}
             value={form.account || ''}
             onChange={(v) => set('account', v)}
             onAddNew={onAddAccount}
           />
-          <p className="text-xs text-gray-400 -mt-2">
-            Leave blank to track Actual across every account for this category. Set an account to narrow it down
-            (e.g. plan "EMI" specifically against HDFC).
-          </p>
+          {isTransfer ? (
+            <>
+              <Dropdown
+                label="To Account (optional)"
+                options={accountOptions || []}
+                value={form.toAccount || ''}
+                onChange={(v) => set('toAccount', v)}
+                onAddNew={onAddAccount}
+              />
+              <p className="text-xs text-gray-400 -mt-2">
+                Set both From and To to track this specific transfer (e.g. a wants allowance, ICICI to AXIS) -
+                Actual will only count transfers that match both sides. Leave one blank to fall back to matching
+                just the other side.
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-gray-400 -mt-2">
+              Leave blank to track Actual across every account for this category. Set an account to narrow it down
+              (e.g. plan "EMI" specifically against HDFC).
+            </p>
+          )}
 
           <button onClick={handleSubmit} disabled={busy}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-lg mt-2 disabled:opacity-60">
@@ -145,11 +172,12 @@ function TemplateManager({ template, categoryOptions, onAddCategory, accountOpti
           plannedAmount: String(editingItem.defaultPlannedAmount),
           section: editingItem.section,
           account: editingItem.account,
+          toAccount: editingItem.toAccount,
         } : null}
         onSave={async (entry) => {
           await onSave(editingItem, {
             category: entry.category, section: entry.section,
-            defaultPlannedAmount: entry.plannedAmount, account: entry.account,
+            defaultPlannedAmount: entry.plannedAmount, account: entry.account, toAccount: entry.toAccount,
           });
           setEditingItem(undefined);
         }}
@@ -182,7 +210,7 @@ function TemplateManager({ template, categoryOptions, onAddCategory, accountOpti
                 className="w-full flex items-center justify-between px-3 py-2.5 border-b border-gray-200 last:border-0 text-left active:bg-gray-100">
                 <div>
                   <p className="text-sm text-gray-900">{t.category}</p>
-                  <p className="text-xs text-gray-400">{t.section}{t.account ? ` \u00b7 ${t.account}` : ''}</p>
+                  <p className="text-xs text-gray-400">{t.section}{accountLabel(t) ? ` \u00b7 ${accountLabel(t)}` : ''}</p>
                 </div>
                 <span className="text-sm text-gray-500">{formatCurrency(t.defaultPlannedAmount)}</span>
               </button>
@@ -204,8 +232,8 @@ function TemplateManager({ template, categoryOptions, onAddCategory, accountOpti
  * selected, since "pull the whole template" is still the common case.
  */
 function LoadTemplateModal({ template, monthPlans, onLoad, onClose }) {
-  const alreadyPlanned = new Set(monthPlans.map((p) => `${p.category}|${p.account || ''}`));
-  const availableItems = template.filter((t) => !alreadyPlanned.has(`${t.category}|${t.account || ''}`));
+  const alreadyPlanned = new Set(monthPlans.map((p) => `${p.category}|${p.account || ''}|${p.toAccount || ''}`));
+  const availableItems = template.filter((t) => !alreadyPlanned.has(`${t.category}|${t.account || ''}|${t.toAccount || ''}`));
   const [selected, setSelected] = useState(new Set(availableItems.map((t) => t._rowIndex)));
   const [isLoading, setIsLoading] = useState(false);
 
@@ -254,7 +282,7 @@ function LoadTemplateModal({ template, monthPlans, onLoad, onClose }) {
                   <input type="checkbox" checked={selected.has(t._rowIndex)} onChange={() => toggle(t._rowIndex)} />
                   <div className="flex-1">
                     <p className="text-sm text-gray-900">{t.category}</p>
-                    <p className="text-xs text-gray-400">{t.section}{t.account ? ` \u00b7 ${t.account}` : ''}</p>
+                    <p className="text-xs text-gray-400">{t.section}{accountLabel(t) ? ` \u00b7 ${accountLabel(t)}` : ''}</p>
                   </div>
                   <span className="text-sm text-gray-500">{formatCurrency(t.defaultPlannedAmount)}</span>
                 </label>
@@ -289,11 +317,17 @@ export default function MonthlyPage() {
 
   // Actual for a plan with no Account set matches every account for that
   // Type (the pre-existing, still-supported behavior); a plan with an
-  // Account set narrows to just that account.
+  // Account set narrows to just that account; a TRANSFER plan with both
+  // Account (from) and ToAccount set pairs the two CashBook legs of a real
+  // transfer instead (see computeActualForTransferPlan).
   const actuals = computeMonthlyActuals(cashBook.rows, month);
-  const actualForPlan = (p) => (p.account
-    ? computeActualForPlan(cashBook.rows, month, p.category, p.account)
-    : actuals.get(p.category) || 0);
+  const actualForPlan = (p) => {
+    if (p.category === 'TRANSFER' && p.account && p.toAccount) {
+      return computeActualForTransferPlan(cashBook.rows, month, p.account, p.toAccount);
+    }
+    if (p.account) return computeActualForPlan(cashBook.rows, month, p.category, p.account);
+    return actuals.get(p.category) || 0;
+  };
 
   const monthPlans = monthly.plans.filter((p) => p.month === month);
   const hasPlans = monthPlans.length > 0;
@@ -478,7 +512,7 @@ export default function MonthlyPage() {
                       className="w-full flex items-center justify-between px-3 py-2.5 border-b border-gray-100 last:border-0 text-left active:bg-gray-50">
                       <div>
                         <span className="text-sm text-gray-900">{p.category}</span>
-                        {p.account && <p className="text-xs text-gray-400">{p.account}</p>}
+                        {accountLabel(p) && <p className="text-xs text-gray-400">{accountLabel(p)}</p>}
                       </div>
                       <div className="text-right text-xs">
                         <p className="text-gray-500">Plan: {formatCurrency(p.plannedAmount)}</p>
@@ -502,7 +536,7 @@ export default function MonthlyPage() {
           onAddAccount={handleAddAccount}
           initial={editingPlan ? {
             category: editingPlan.category, plannedAmount: String(editingPlan.plannedAmount),
-            section: editingPlan.section, account: editingPlan.account,
+            section: editingPlan.section, account: editingPlan.account, toAccount: editingPlan.toAccount,
           } : null}
           onSave={handleSave}
           onDelete={editingPlan ? handleDelete : undefined}

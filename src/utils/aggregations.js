@@ -231,6 +231,60 @@ export function computeActualForPlan(rows, month, category, account) {
 }
 
 /**
+ * Actual amount transferred for a Monthly Plan that explicitly plans a
+ * specific "From Account -> To Account" transfer (e.g. "move ₹10,000 from
+ * ICICI to AXIS" for a wants allowance), rather than just narrowing to one
+ * side of it like `computeActualForPlan` does.
+ *
+ * A CashBook self-transfer (see useCashBook.jsx addTransfer) is written as
+ * TWO separate rows sharing the same Date and Description - one Money OUT
+ * from the source account, one Money IN to the destination account - with
+ * no other link between them. This pairs each "from" leg with a "to" leg
+ * matching on (date, description, amount), consuming each match one-to-one
+ * so a single leg is never reused across multiple pairs (matters if there
+ * happen to be more than one ICICI->AXIS transfer with the exact same
+ * description in the same month).
+ * @param {string[][]} rows - CashBook rows [Date, Desc, Account, Type, IN, OUT]
+ * @param {string} month - "YYYY-MM"
+ * @param {string} fromAccount
+ * @param {string} toAccount
+ * @returns {number} total successfully-paired transferred amount
+ */
+export function computeActualForTransferPlan(rows, month, fromAccount, toAccount) {
+  const fromLegs = [];
+  const toLegs = [];
+
+  for (const row of rows) {
+    const date = row[0] || '';
+    if (!date.startsWith(month)) continue;
+    if ((row[3] || '') !== 'TRANSFER') continue;
+    const account = row[2] || '';
+    const description = row[1] || '';
+    const moneyIn = parseFloat(row[4]) || 0;
+    const moneyOut = parseFloat(row[5]) || 0;
+
+    if (account === fromAccount && moneyOut > 0) fromLegs.push({ date, description, amount: moneyOut });
+    if (account === toAccount && moneyIn > 0) toLegs.push({ date, description, amount: moneyIn });
+  }
+
+  let total = 0;
+  const usedToIndexes = new Set();
+  for (const fromLeg of fromLegs) {
+    const matchIndex = toLegs.findIndex((toLeg, idx) =>
+      !usedToIndexes.has(idx) &&
+      toLeg.date === fromLeg.date &&
+      toLeg.description === fromLeg.description &&
+      toLeg.amount === fromLeg.amount
+    );
+    if (matchIndex !== -1) {
+      usedToIndexes.add(matchIndex);
+      total += fromLeg.amount;
+    }
+  }
+  return total;
+}
+
+/**
  * Total income, outflow, and surplus (income - outflow) from CashBook for a
  * given month.
  * @param {string[][]} rows - CashBook rows [Date, Desc, Account, Type, IN, OUT]
