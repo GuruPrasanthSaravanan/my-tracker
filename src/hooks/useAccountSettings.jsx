@@ -32,29 +32,45 @@ export function useAccountSettings() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const parseAccountRow = (row) => ({
+    minBalance: parseFloat(row[1]) || 0,
+    accountNumber: row[2] || '',
+    ifsc: row[3] || '',
+    branch: row[4] || '',
+    accountType: row[5] || '',
+    purpose: row[6] || '',
+    rmName: row[7] || '',
+    rmContact: row[8] || '',
+  });
+
   const accountsInfo = new Map();
   for (const row of rows) {
     if (!row[0]) continue;
-    accountsInfo.set(row[0], {
-      minBalance: parseFloat(row[1]) || 0,
-      accountNumber: row[2] || '',
-      ifsc: row[3] || '',
-      branch: row[4] || '',
-      accountType: row[5] || '',
-      purpose: row[6] || '',
-      rmName: row[7] || '',
-      rmContact: row[8] || '',
-    });
+    accountsInfo.set(row[0], parseAccountRow(row));
   }
 
   const minBalances = new Map();
   for (const [account, info] of accountsInfo) minBalances.set(account, info.minBalance);
 
-  /** Upserts an account's row, merging with whatever fields already exist so a
-   * partial update (e.g. just MinBalance) never wipes out other columns. */
+  /**
+   * Upserts an account's row, merging with whatever fields already exist so a
+   * partial update (e.g. just MinBalance) never wipes out other columns.
+   *
+   * Always re-reads the sheet fresh right before deciding insert-vs-update,
+   * rather than trusting this hook's own `rows` state. Using stale/empty
+   * `rows` here (e.g. if this fires from the Reconcile screen before this
+   * hook's own initial fetch has finished) would make `existingIndex` come
+   * back -1 even for an account that already has a details row, appending a
+   * near-blank duplicate row instead of updating the real one - and since
+   * `accountsInfo` is built by iterating rows in order, that later near-blank
+   * row would then shadow/overwrite the real details in the Map, making
+   * previously-entered account info look like it silently disappeared. See
+   * bugs-and-lessons.md §23.
+   */
   const upsertAccount = useCallback(async (account, fields) => {
-    const existingIndex = rows.findIndex((r) => r[0] === account);
-    const existing = existingIndex >= 0 ? accountsInfo.get(account) : {};
+    const freshRows = await readSheet(token, 'AccountSettings!A2:I500');
+    const existingIndex = freshRows.findIndex((r) => r[0] === account);
+    const existing = existingIndex >= 0 ? parseAccountRow(freshRows[existingIndex]) : {};
     const merged = { ...existing, ...fields };
     const values = [
       account, merged.minBalance || 0, merged.accountNumber || '', merged.ifsc || '',
@@ -65,11 +81,10 @@ export function useAccountSettings() {
       const sheetRow = existingIndex + 2;
       await updateRow(token, `AccountSettings!A${sheetRow}:I${sheetRow}`, values);
     } else {
-      await appendRowAt(token, 'AccountSettings', 'I', rows.length, values);
+      await appendRowAt(token, 'AccountSettings', 'I', freshRows.length, values);
     }
     await fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, fetchData, rows]);
+  }, [token, fetchData]);
 
   const setMinBalance = useCallback((account, minBalance) => upsertAccount(account, { minBalance }), [upsertAccount]);
   const setAccountInfo = useCallback((account, fields) => upsertAccount(account, fields), [upsertAccount]);

@@ -177,6 +177,10 @@ export default function SettingsPage() {
   const [removing, setRemoving] = useState(null);
   const [renamingValue, setRenamingValue] = useState(null);
   const [editingAccount, setEditingAccount] = useState(null);
+  const [newAccountName, setNewAccountName] = useState('');
+  const [isAddingAccount, setIsAddingAccount] = useState(false);
+  const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(null);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [confirmDeleteDebts, setConfirmDeleteDebts] = useState(false);
   const [isDeletingDebts, setIsDeletingDebts] = useState(false);
   const [toast, setToast] = useState(null);
@@ -224,6 +228,38 @@ export default function SettingsPage() {
       notify('Account info saved!');
     } catch {
       notify('Failed to save.', 'error');
+    }
+  };
+
+  // Adding/removing an account here is really just the Accounts list under
+  // the hood (same as the "Accounts" tab in Manage Lists above) - surfaced
+  // again in this section too so you don't have to scroll up to add a new
+  // account before you can immediately tap in and fill its details.
+  const handleAddAccount = async () => {
+    if (isAddingAccount || !newAccountName.trim()) return;
+    setIsAddingAccount(true);
+    try {
+      await lists.addListItem('accounts', newAccountName.trim());
+      setNewAccountName('');
+      notify('Account added!');
+    } catch {
+      notify('Failed to add account.', 'error');
+    } finally {
+      setIsAddingAccount(false);
+    }
+  };
+
+  const handleDeleteAccount = async (account) => {
+    if (isDeletingAccount) return;
+    setIsDeletingAccount(true);
+    try {
+      await lists.removeListItem('accounts', account);
+      setConfirmDeleteAccount(null);
+      notify(`Removed "${account}".`);
+    } catch {
+      notify('Failed to remove. It may still be in use elsewhere.', 'error');
+    } finally {
+      setIsDeletingAccount(false);
     }
   };
 
@@ -343,6 +379,16 @@ export default function SettingsPage() {
           Tap an account to add details like account number, IFSC, branch, relationship manager, and minimum
           balance (also settable from the Reconcile screen on CashBook).
         </p>
+        <div className="flex gap-2 mb-2">
+          <input type="text" value={newAccountName} onChange={(e) => setNewAccountName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAddAccount()}
+            placeholder="New account name" disabled={isAddingAccount}
+            className="flex-1 border rounded-lg px-3 py-2 text-sm disabled:opacity-50" />
+          <button onClick={handleAddAccount} disabled={isAddingAccount || !newAccountName.trim()}
+            className="bg-primary text-white px-4 rounded-lg text-sm font-medium disabled:opacity-50">
+            {isAddingAccount ? 'Adding...' : 'Add'}
+          </button>
+        </div>
         <div className="bg-white rounded-xl shadow-sm overflow-hidden">
           {(lists.lists.accounts || []).length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-4">No accounts in your Lists tab yet.</p>
@@ -350,16 +396,35 @@ export default function SettingsPage() {
             lists.lists.accounts.map((account) => {
               const info = accountSettings.accountsInfo.get(account);
               return (
-                <button key={account} onClick={() => setEditingAccount(account)}
-                  className="w-full flex items-center justify-between px-3 py-2.5 border-b border-gray-100 last:border-0 text-left active:bg-gray-50">
-                  <div>
-                    <p className="text-sm text-gray-900">{account}</p>
-                    {info?.purpose && <p className="text-xs text-gray-400">{info.purpose}</p>}
-                  </div>
-                  {info?.minBalance > 0 && (
-                    <span className="text-xs text-gray-500">Min: {formatCurrency(info.minBalance)}</span>
+                <div key={account} className="flex items-center border-b border-gray-100 last:border-0">
+                  <button onClick={() => setEditingAccount(account)}
+                    className="flex-1 flex items-center justify-between px-3 py-2.5 text-left active:bg-gray-50">
+                    <div>
+                      <p className="text-sm text-gray-900">{account}</p>
+                      {info?.purpose && <p className="text-xs text-gray-400">{info.purpose}</p>}
+                    </div>
+                    {info?.minBalance > 0 && (
+                      <span className="text-xs text-gray-500">Min: {formatCurrency(info.minBalance)}</span>
+                    )}
+                  </button>
+                  {confirmDeleteAccount === account ? (
+                    <div className="flex items-center gap-1 pr-3">
+                      <button onClick={() => handleDeleteAccount(account)} disabled={isDeletingAccount}
+                        className="text-xs text-danger font-medium px-2 py-1 disabled:opacity-50">
+                        {isDeletingAccount ? '...' : 'Confirm'}
+                      </button>
+                      <button onClick={() => setConfirmDeleteAccount(null)} disabled={isDeletingAccount}
+                        className="text-xs text-gray-400 px-2 py-1">
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => setConfirmDeleteAccount(account)}
+                      className="text-gray-300 hover:text-danger px-3 py-2.5">
+                      <X size={14} />
+                    </button>
                   )}
-                </button>
+                </div>
               );
             })
           )}
