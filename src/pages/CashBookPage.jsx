@@ -139,7 +139,9 @@ export default function CashBookPage() {
     .filter(([row]) => row[0] || row[1] || row[4] || row[5]) // skip cleared rows
     .filter(([row]) => !filterMonth || (row[0] || '').startsWith(filterMonth))
     .filter(([row]) => !filterAccount || row[2] === filterAccount);
-  const filteredSpend = filteredRows.reduce((sum, [row]) => sum + (parseFloat(row[5]) || 0), 0);
+  const filteredIn = filteredRows.reduce((sum, [row]) => sum + (parseFloat(row[4]) || 0), 0);
+  const filteredOut = filteredRows.reduce((sum, [row]) => sum + (parseFloat(row[5]) || 0), 0);
+  const filteredNet = filteredIn - filteredOut;
 
   const nonZeroAccounts = Array.from(accountBalances.entries())
     .filter(([, val]) => val !== 0)
@@ -221,14 +223,26 @@ export default function CashBookPage() {
           </button>
         </div>
 
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-gray-500">
-            Transactions ({filteredRows.length})
-            {filterAccount ? ` \u00b7 ${filterAccount}` : ''}
-          </h2>
-          <span className="text-sm font-semibold text-danger">
-            {formatCurrency(filteredSpend)} spent
-          </span>
+        <h2 className="text-sm font-semibold text-gray-500 mb-2">
+          Transactions ({filteredRows.length})
+          {filterAccount ? ` \u00b7 ${filterAccount}` : ''}
+        </h2>
+
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          <div className="bg-white rounded-xl p-2.5">
+            <p className="text-xs text-gray-400">In</p>
+            <p className="text-sm font-semibold text-success">{formatCurrency(filteredIn)}</p>
+          </div>
+          <div className="bg-white rounded-xl p-2.5">
+            <p className="text-xs text-gray-400">Out</p>
+            <p className="text-sm font-semibold text-danger">{formatCurrency(filteredOut)}</p>
+          </div>
+          <div className="bg-white rounded-xl p-2.5">
+            <p className="text-xs text-gray-400">Balance</p>
+            <p className={`text-sm font-semibold ${filteredNet >= 0 ? 'text-success' : 'text-danger'}`}>
+              {formatCurrency(filteredNet)}
+            </p>
+          </div>
         </div>
 
         {isLoading ? (
