@@ -61,3 +61,16 @@ export function addDaysISO(dateStr, days) {
   d.setDate(d.getDate() + days);
   return toLocalISODate(d);
 }
+
+/** Shifts a "YYYY-MM" month string by `delta` months (can be negative). */
+export function shiftMonth(month, delta) {
+  const [y, m] = month.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** "2026-09" -> "September 2026" */
+export function monthLabel(month) {
+  const [y, m] = month.split('-').map(Number);
+  return new Date(y, m - 1, 1).toLocaleString('en', { month: 'long', year: 'numeric' });
+}

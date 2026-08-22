@@ -4,7 +4,7 @@ import {
   computeMonthlyActuals, computeActualForPlan, computeActualForTransferPlan,
   computeTypeSpendBreakdown, computeSubCategorySpendBreakdown, computePlannedBreakdown,
 } from '../utils/aggregations';
-import { formatCurrency, getTodayISO } from '../utils/formatters';
+import { formatCurrency, getTodayISO, shiftMonth, monthLabel } from '../utils/formatters';
 import Dropdown from '../components/Dropdown';
 import PieChart from '../components/PieChart';
 import BarChart from '../components/BarChart';
@@ -13,17 +13,6 @@ import LoadingSkeleton from '../components/LoadingSkeleton';
 import { ChevronLeft, ChevronRight, Plus, X, Trash2, Settings2, ArrowLeft, Download } from 'lucide-react';
 
 const SECTIONS = ['Income', 'My Outflows', 'Wife Outflows', 'Projects'];
-
-function shiftMonth(month, delta) {
-  const [y, m] = month.split('-').map(Number);
-  const d = new Date(y, m - 1 + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-}
-
-function monthLabel(month) {
-  const [y, m] = month.split('-').map(Number);
-  return new Date(y, m - 1, 1).toLocaleString('en', { month: 'long', year: 'numeric' });
-}
 
 /** "ICICI -> AXIS" for a Transfer plan with both sides set, else just the (From) account, else nothing. */
 function accountLabel(item) {

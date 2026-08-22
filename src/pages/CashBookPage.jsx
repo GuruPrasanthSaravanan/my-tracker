@@ -9,8 +9,8 @@ import LoadingSkeleton from '../components/LoadingSkeleton';
 import EntryForm from '../components/EntryForm';
 import ReconcileModal from '../components/ReconcileModal';
 import TransferForm from '../components/TransferForm';
-import { formatCurrency, getTodayISO } from '../utils/formatters';
-import { ArrowLeftRight, Plus } from 'lucide-react';
+import { formatCurrency, getTodayISO, shiftMonth, monthLabel } from '../utils/formatters';
+import { ArrowLeftRight, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export default function CashBookPage() {
   const { cashBook, lists: listsData, accountSettings, accountTypeFavorites, subCategories } = useAppData();
@@ -24,6 +24,12 @@ export default function CashBookPage() {
   const [reconcileAccount, setReconcileAccount] = useState(null);
   const [showAllAccounts, setShowAllAccounts] = useState(false);
   const [toast, setToast] = useState(null);
+
+  // Transaction list filters - default to the current month across all
+  // accounts, narrowed down from there. Kept separate from the summary
+  // cards' account balances above (those are always all-time, all-account).
+  const [filterMonth, setFilterMonth] = useState(getTodayISO().slice(0, 7));
+  const [filterAccount, setFilterAccount] = useState('');
 
   // Dashboard's Quick Actions (and the funding-warning "Transfer Now"
   // shortcut) navigate here with state telling us to open a form
@@ -129,6 +135,12 @@ export default function CashBookPage() {
     }
   };
 
+  const filteredRows = rows.map((row, i) => [row, i])
+    .filter(([row]) => row[0] || row[1] || row[4] || row[5]) // skip cleared rows
+    .filter(([row]) => !filterMonth || (row[0] || '').startsWith(filterMonth))
+    .filter(([row]) => !filterAccount || row[2] === filterAccount);
+  const filteredSpend = filteredRows.reduce((sum, [row]) => sum + (parseFloat(row[5]) || 0), 0);
+
   const nonZeroAccounts = Array.from(accountBalances.entries())
     .filter(([, val]) => val !== 0)
     .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
@@ -187,19 +199,46 @@ export default function CashBookPage() {
         </div>
       )}
 
-      {/* Transaction List */}
+      {/* Transaction List - filterable by month and account, since "what did
+          I spend from X account in August" is a common question that
+          scrolling the full, unbounded list doesn't answer well. */}
       <div className="mt-4">
-        <h2 className="text-sm font-semibold text-gray-500 mb-2">
-          Recent Transactions ({rows.length})
-        </h2>
+        <div className="flex items-center justify-between mb-2">
+          <button onClick={() => setFilterMonth(shiftMonth(filterMonth, -1))} className="p-1"><ChevronLeft size={18} /></button>
+          <h2 className="text-sm font-semibold text-gray-900">{monthLabel(filterMonth)}</h2>
+          <button onClick={() => setFilterMonth(shiftMonth(filterMonth, 1))} className="p-1"><ChevronRight size={18} /></button>
+        </div>
+
+        <div className="flex items-center gap-2 mb-3">
+          <select value={filterAccount} onChange={(e) => setFilterAccount(e.target.value)}
+            className="flex-1 border rounded-lg px-3 py-2 text-sm bg-white">
+            <option value="">All accounts</option>
+            {lists.accounts.map((acc) => <option key={acc} value={acc}>{acc}</option>)}
+          </select>
+          <button onClick={() => setFilterMonth(getTodayISO().slice(0, 7))}
+            className="text-xs text-primary font-medium px-2 whitespace-nowrap">
+            This month
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-sm font-semibold text-gray-500">
+            Transactions ({filteredRows.length})
+            {filterAccount ? ` \u00b7 ${filterAccount}` : ''}
+          </h2>
+          <span className="text-sm font-semibold text-danger">
+            {formatCurrency(filteredSpend)} spent
+          </span>
+        </div>
+
         {isLoading ? (
           <LoadingSkeleton rows={8} />
-        ) : rows.length === 0 ? (
-          <p className="text-center text-gray-400 py-8">No entries yet. Tap + to add one.</p>
+        ) : filteredRows.length === 0 ? (
+          <p className="text-center text-gray-400 py-8">
+            {rows.length === 0 ? 'No entries yet. Tap + to add one.' : 'No entries match this filter.'}
+          </p>
         ) : (
-          [...rows].map((row, i) => [row, i]).reverse()
-            .filter(([row]) => row[0] || row[1] || row[4] || row[5]) // skip cleared rows
-            .map(([row, originalIndex]) => (
+          [...filteredRows].reverse().map(([row, originalIndex]) => (
             <button key={originalIndex} onClick={() => openEdit(originalIndex, row)}
               className="w-full text-left active:bg-gray-50 transition">
               <TransactionRow
