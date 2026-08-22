@@ -168,10 +168,13 @@ export default function CashBookPage() {
         )}
       </div>
 
-      {/* All accounts (expanded) - non-sticky, so it doesn't grow the sticky header above. */}
+      {/* Remaining accounts beyond the sticky preview above - non-sticky, so
+          it doesn't grow the sticky header, and deliberately only the
+          leftover accounts (not the full list again) to avoid showing the
+          same preview accounts twice. */}
       {showAllAccounts && (
         <div className="grid grid-cols-2 gap-2 mb-4">
-          {nonZeroAccounts.map(([account, balance]) => (
+          {nonZeroAccounts.slice(ACCOUNT_PREVIEW_COUNT).map(([account, balance]) => (
             <SummaryCard
               key={account}
               label={account}
