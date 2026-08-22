@@ -234,9 +234,13 @@ export default function ObligationsPage() {
         await creditCards.addBill(entry);
       }
       if (entry.logToCashBook && entry.cashBookAccount) {
+        // The *incremental* payment amount (see CreditCardBillForm.jsx's
+        // newPaymentAmount) - not the whole running Payment Made total -
+        // so a follow-up edit that adds a top-up payment doesn't re-log
+        // the portion already logged from an earlier save.
         await cashBook.addEntry({
           date: entry.paymentDate || entry.dueDate, description: `${entry.cardName} - bill payment`,
-          account: entry.cashBookAccount, type: 'CC', moneyOut: entry.paymentMade,
+          account: entry.cashBookAccount, type: 'CC', moneyOut: entry.newPaymentAmount,
         });
       }
       setShowBillForm(false);

@@ -14,12 +14,7 @@ export default function CreditCardBillForm({ cardName, defaultAccount, accountOp
     paymentDate: '',
     notes: prefillTotalAmountDue != null ? 'Amount estimated from CashBook spend - verify against your actual statement.' : '',
   });
-  // A brand-new bill (or one that had no payment recorded yet) defaults to
-  // logging in CashBook once a payment amount is entered; editing a bill that
-  // already had a payment recorded defaults to unchecked, to avoid silently
-  // double-logging the same payment on every subsequent edit.
-  const alreadyHadPayment = (parseFloat(initial?.paymentMade) || 0) > 0;
-  const [logToCashBook, setLogToCashBook] = useState(!alreadyHadPayment);
+  const [logToCashBook, setLogToCashBook] = useState(true);
   const [cashBookAccount, setCashBookAccount] = useState(defaultAccount || '');
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -32,7 +27,16 @@ export default function CreditCardBillForm({ cardName, defaultAccount, accountOp
     ? computeMinimumDue({ totalAmountDue: parseFloat(form.totalAmountDue) || 0 })
     : 0;
 
-  const hasNewPayment = (parseFloat(form.paymentMade) || 0) > 0 && !alreadyHadPayment;
+  // The *incremental* amount to log in CashBook - not the whole Payment
+  // Made field - so editing a bill to add a follow-up/top-up payment (e.g.
+  // "paid the minimum due earlier, now paying the rest") only logs the new
+  // difference instead of either re-logging the whole amount again or (the
+  // bug this replaces) silently logging nothing at all on any edit past the
+  // first, just because *some* payment already existed on the bill.
+  const priorPaymentMade = parseFloat(initial?.paymentMade) || 0;
+  const currentPaymentMade = parseFloat(form.paymentMade) || 0;
+  const newPaymentAmount = Math.max(0, currentPaymentMade - priorPaymentMade);
+  const hasNewPayment = newPaymentAmount > 0;
 
   const handleSubmit = async () => {
     if (busy) return;
@@ -55,6 +59,7 @@ export default function CreditCardBillForm({ cardName, defaultAccount, accountOp
         isEstimated: !isEditing && prefillTotalAmountDue != null,
         logToCashBook: hasNewPayment && logToCashBook,
         cashBookAccount: hasNewPayment && logToCashBook ? cashBookAccount : null,
+        newPaymentAmount,
       });
     } finally {
       setIsSaving(false);
