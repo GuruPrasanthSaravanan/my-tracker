@@ -2,10 +2,10 @@ import { useState } from 'react';
 import { useAppData } from '../contexts/DataContext';
 import { useAuth } from '../auth/useAuth';
 import { SPREADSHEET_ID } from '../config';
-import { deleteSheetTab } from '../api/sheets';
+import { useSheetHealth } from '../hooks/useSheetHealth';
 import { formatCurrency } from '../utils/formatters';
 import Toast from '../components/Toast';
-import { X, Pencil, Download, LogOut, ExternalLink, Info, AlertTriangle } from 'lucide-react';
+import { X, Pencil, Download, LogOut, ExternalLink, Info, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 const LIST_TABS = [
   { key: 'accounts', label: 'Accounts' },
@@ -172,7 +172,8 @@ export default function SettingsPage() {
     lists, cashBook, vendors, projects, emiLoans, handLoans, creditCards, chitFunds,
     monthly, netWorth, accountSettings, accountTypeFavorites, subCategories,
   } = useAppData();
-  const { user, signOut, token } = useAuth();
+  const { user, signOut } = useAuth();
+  const sheetHealth = useSheetHealth();
   const [activeListTab, setActiveListTab] = useState('accounts');
   const [removing, setRemoving] = useState(null);
   const [renamingValue, setRenamingValue] = useState(null);
@@ -181,8 +182,9 @@ export default function SettingsPage() {
   const [isAddingAccount, setIsAddingAccount] = useState(false);
   const [confirmDeleteAccount, setConfirmDeleteAccount] = useState(null);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
-  const [confirmDeleteDebts, setConfirmDeleteDebts] = useState(false);
-  const [isDeletingDebts, setIsDeletingDebts] = useState(false);
+  const [confirmDeleteOrphan, setConfirmDeleteOrphan] = useState(null);
+  const [isDeletingOrphan, setIsDeletingOrphan] = useState(false);
+  const [isProvisioning, setIsProvisioning] = useState(false);
   const [toast, setToast] = useState(null);
   const notify = (message, type = 'success') => setToast({ message, type });
 
@@ -263,17 +265,30 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteDebtsTab = async () => {
-    if (isDeletingDebts) return;
-    setIsDeletingDebts(true);
+  const handleDeleteOrphanTab = async (title) => {
+    if (isDeletingOrphan) return;
+    setIsDeletingOrphan(true);
     try {
-      const deleted = await deleteSheetTab(token, 'Debts');
-      notify(deleted ? 'Legacy Debts tab deleted.' : 'No "Debts" tab found - already removed.');
-      setConfirmDeleteDebts(false);
+      const deleted = await sheetHealth.deleteOrphanTab(title);
+      notify(deleted ? `Deleted "${title}" tab.` : `No "${title}" tab found - already removed.`);
+      setConfirmDeleteOrphan(null);
     } catch {
       notify('Failed to delete the tab.', 'error');
     } finally {
-      setIsDeletingDebts(false);
+      setIsDeletingOrphan(false);
+    }
+  };
+
+  const handleProvisionMissingTabs = async () => {
+    if (isProvisioning) return;
+    setIsProvisioning(true);
+    try {
+      await sheetHealth.provisionMissingTabs();
+      notify('Missing tabs created!');
+    } catch {
+      notify('Failed to create missing tabs.', 'error');
+    } finally {
+      setIsProvisioning(false);
     }
   };
 
@@ -455,31 +470,71 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Danger Zone */}
+      {/* Sheet Health */}
       <div>
-        <h2 className="text-sm font-semibold text-danger mb-2">Danger Zone</h2>
-        <div className="bg-red-50 rounded-xl p-4">
-          <p className="text-sm text-gray-700 mb-2">
-            The old "Debts" tab from before EMI Loans/Hand Loans/Credit Cards existed is no longer used by the app.
-          </p>
-          {confirmDeleteDebts ? (
-            <div className="flex gap-2">
-              <button onClick={handleDeleteDebtsTab} disabled={isDeletingDebts}
-                className="flex-1 bg-danger text-white py-2.5 rounded-xl font-semibold text-sm disabled:opacity-60">
-                {isDeletingDebts ? 'Deleting...' : 'Confirm Delete'}
-              </button>
-              <button onClick={() => setConfirmDeleteDebts(false)} disabled={isDeletingDebts}
-                className="flex-1 bg-white text-gray-600 py-2.5 rounded-xl font-semibold text-sm disabled:opacity-60">
-                Cancel
-              </button>
-            </div>
-          ) : (
-            <button onClick={() => setConfirmDeleteDebts(true)}
-              className="w-full flex items-center justify-center gap-2 bg-white text-danger py-2.5 rounded-xl font-semibold text-sm">
-              <AlertTriangle size={16} /> Delete Legacy "Debts" Tab
-            </button>
-          )}
-        </div>
+        <h2 className="text-sm font-semibold text-gray-500 mb-2">Sheet Health</h2>
+        <p className="text-xs text-gray-400 mb-2">
+          Compares your spreadsheet's actual tabs against what this app expects, so nothing gets left behind or
+          silently drifts out of sync (e.g. an old tab from before a feature was rebuilt, like the legacy "Debts"
+          tab from before EMI Loans/Hand Loans/Credit Cards existed).
+        </p>
+        {sheetHealth.isLoading ? (
+          <p className="text-sm text-gray-400 text-center py-2 bg-white rounded-xl shadow-sm">Checking...</p>
+        ) : (
+          <div className="space-y-2">
+            {sheetHealth.orphanTabs.length === 0 && sheetHealth.missingTabs.length === 0 && (
+              <div className="bg-green-50 rounded-xl p-4 flex items-center gap-2">
+                <CheckCircle2 size={18} className="text-success shrink-0" />
+                <p className="text-sm text-gray-700">All good - no unexpected or missing tabs.</p>
+              </div>
+            )}
+
+            {sheetHealth.orphanTabs.length > 0 && (
+              <div className="bg-red-50 rounded-xl p-4">
+                <p className="text-sm text-gray-700 mb-2">
+                  These tabs exist in your spreadsheet but aren't used by the app anymore - safe to review and delete.
+                </p>
+                <div className="space-y-2">
+                  {sheetHealth.orphanTabs.map((title) => (
+                    <div key={title} className="bg-white rounded-lg p-2.5 flex items-center justify-between gap-2">
+                      <span className="text-sm text-gray-900 font-medium">{title}</span>
+                      {confirmDeleteOrphan === title ? (
+                        <div className="flex gap-1.5 shrink-0">
+                          <button onClick={() => handleDeleteOrphanTab(title)} disabled={isDeletingOrphan}
+                            className="bg-danger text-white px-3 py-1.5 rounded-lg font-semibold text-xs disabled:opacity-60">
+                            {isDeletingOrphan ? 'Deleting...' : 'Confirm'}
+                          </button>
+                          <button onClick={() => setConfirmDeleteOrphan(null)} disabled={isDeletingOrphan}
+                            className="bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg font-semibold text-xs disabled:opacity-60">
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setConfirmDeleteOrphan(title)}
+                          className="flex items-center gap-1 text-danger text-xs font-medium shrink-0">
+                          <AlertTriangle size={13} /> Delete
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {sheetHealth.missingTabs.length > 0 && (
+              <div className="bg-amber-50 rounded-xl p-4">
+                <p className="text-sm text-gray-700 mb-2">
+                  These tabs are expected but weren't found (they'll normally be created automatically next time the
+                  app loads): {sheetHealth.missingTabs.join(', ')}
+                </p>
+                <button onClick={handleProvisionMissingTabs} disabled={isProvisioning}
+                  className="w-full bg-white text-amber-700 py-2 rounded-lg font-semibold text-sm disabled:opacity-60">
+                  {isProvisioning ? 'Creating...' : 'Create Missing Tabs Now'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {editingAccount && (
