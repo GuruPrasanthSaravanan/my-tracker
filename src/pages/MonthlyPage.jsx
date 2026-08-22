@@ -546,8 +546,15 @@ export default function MonthlyPage() {
               <h3 className="text-xs font-semibold text-gray-400 uppercase mb-1">{section}</h3>
               <div className="bg-white rounded-xl shadow-sm overflow-hidden">
                 {sectionPlans.map((p) => {
-                  const actual = actualForPlan(p);
-                  const diff = actual - p.plannedAmount;
+                  // actualForPlan returns a signed net (Money IN - Money OUT),
+                  // naturally negative for a pure-outflow category - but
+                  // Planned Amount is always a plain positive budgeted figure.
+                  // Compare magnitudes (same convention as the Planned vs
+                  // Actual bar chart above, see bugs-and-lessons.md §31) so
+                  // this never shows a confusing negative Actual or a
+                  // meaningless "over/under" color for an outflow category.
+                  const actualMagnitude = Math.abs(actualForPlan(p));
+                  const isOverPlanned = actualMagnitude > p.plannedAmount;
                   return (
                     <button key={p._rowIndex} onClick={() => { setEditingPlan(p); setShowForm(true); }}
                       className="w-full flex items-center justify-between px-3 py-2.5 border-b border-gray-100 last:border-0 text-left active:bg-gray-50">
@@ -557,7 +564,7 @@ export default function MonthlyPage() {
                       </div>
                       <div className="text-right text-xs">
                         <p className="text-gray-500">Plan: {formatCurrency(p.plannedAmount)}</p>
-                        <p className={diff >= 0 ? 'text-success' : 'text-danger'}>Actual: {formatCurrency(actual)}</p>
+                        <p className={isOverPlanned ? 'text-danger' : 'text-success'}>Actual: {formatCurrency(actualMagnitude)}</p>
                       </div>
                     </button>
                   );
