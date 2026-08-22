@@ -6,7 +6,7 @@
  */
 export const SHEET_SCHEMAS = {
   Lists: ['Accounts', 'Types', 'Vendors', 'Projects', 'MilestoneStatuses'],
-  CashBook: ['Date', 'Description', 'Account', 'Type', 'Money IN', 'Money OUT'],
+  CashBook: ['Date', 'Description', 'Account', 'Type', 'Money IN', 'Money OUT', 'Project'],
   Vendors: ['Date', 'Vendor', 'Description', 'Project', 'Bill', 'Paid'],
   Projects: [
     'Code', 'Name', 'Budget', 'Est.Labour', 'Est.Material', 'Est.Machine', 'Est.Other',
@@ -20,7 +20,7 @@ export const SHEET_SCHEMAS = {
   CreditCards: ['Name', 'CreditLimit', 'InterestRateMonthly', 'DebitsFrom', 'Status', 'Notes'],
   CreditCardBills: ['CardName', 'StatementDate', 'DueDate', 'TotalAmountDue', 'MinimumAmountDue', 'PaymentMade', 'PaymentDate', 'Notes', 'IsEstimated'],
   AccountSettings: ['Account', 'MinBalance', 'AccountNumber', 'IFSC', 'Branch', 'AccountType', 'Purpose', 'RMName', 'RMContact'],
-  MonthlyPlans: ['Month', 'Category', 'PlannedAmount', 'Section'],
-  MonthlyTemplate: ['Category', 'Section', 'DefaultPlannedAmount'],
+  MonthlyPlans: ['Month', 'Category', 'PlannedAmount', 'Section', 'Account'],
+  MonthlyTemplate: ['Category', 'Section', 'DefaultPlannedAmount', 'Account'],
   NetWorthSnapshots: ['Date', 'AssetsTotal', 'LiabilitiesTotal', 'Notes'],
 };

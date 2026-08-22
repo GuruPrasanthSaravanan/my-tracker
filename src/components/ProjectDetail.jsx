@@ -6,7 +6,7 @@ import MilestoneRow from './MilestoneRow';
 import SummaryCard from './SummaryCard';
 import TransactionRow from './TransactionRow';
 
-export default function ProjectDetail({ project, spent, milestones, vendorRows, onAddMilestone, onAddExpense, onEditProject, onClose }) {
+export default function ProjectDetail({ project, spent, milestones, vendorRows, cashBookRows = [], onAddMilestone, onAddExpense, onEditProject, onClose }) {
   const [showEditForm, setShowEditForm] = useState(false);
   const [editForm, setEditForm] = useState({
     budget: String(project.budget || ''),
@@ -18,26 +18,44 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
   });
   const [isSaving, setIsSaving] = useState(false);
 
-  let labour = 0, material = 0, machine = 0, other = 0;
+  // Classifies a description into a cost bucket - applied to both Vendor
+  // bills and CashBook entries tagged with this project (see EntryForm.jsx's
+  // Type=PROJECT field), so a project's cost breakdown reflects money spent
+  // either way, not just what went through Vendors.
+  const classify = (desc, amount, buckets) => {
+    const d = desc.toLowerCase();
+    if (d.includes('labour') || d.includes('labor') || d.includes('work')) buckets.labour += amount;
+    else if (d.includes('material') || d.includes('cement') || d.includes('brick') || d.includes('sand') || d.includes('steel')) buckets.material += amount;
+    else if (d.includes('machine') || d.includes('jcb') || d.includes('crane') || d.includes('mixer')) buckets.machine += amount;
+    else buckets.other += amount;
+  };
+
+  const buckets = { labour: 0, material: 0, machine: 0, other: 0 };
   for (const row of vendorRows) {
-    if (row[3] === project.code) {
-      const desc = (row[2] || '').toLowerCase();
-      const amount = parseFloat(row[4]) || 0;
-      if (desc.includes('labour') || desc.includes('labor') || desc.includes('work')) {
-        labour += amount;
-      } else if (desc.includes('material') || desc.includes('cement') || desc.includes('brick') || desc.includes('sand') || desc.includes('steel')) {
-        material += amount;
-      } else if (desc.includes('machine') || desc.includes('jcb') || desc.includes('crane') || desc.includes('mixer')) {
-        machine += amount;
-      } else {
-        other += amount;
-      }
-    }
+    if (row[3] === project.code) classify(row[2] || '', parseFloat(row[4]) || 0, buckets);
   }
+  for (const row of cashBookRows) {
+    if (row[6] === project.code) classify(row[1] || '', parseFloat(row[5]) || 0, buckets);
+  }
+  const { labour, material, machine, other } = buckets;
 
   const projectMilestones = milestones.filter((m) => m.project === project.code);
   const projectExpenses = vendorRows.filter((r) => r[3] === project.code);
+  const projectCashBookEntries = cashBookRows.filter((r) => r[6] === project.code);
   const onCredit = projectExpenses.reduce((sum, r) => sum + (parseFloat(r[4]) || 0) - (parseFloat(r[5]) || 0), 0);
+
+  // Combine both sources into one chronological feed for the "Recent
+  // Expenses" list, most recent first.
+  const combinedExpenses = [
+    ...projectExpenses.map((row) => ({
+      date: row[0], description: `${row[1]} - ${row[2]}`, badge: row[3],
+      amount: parseFloat(row[4]) || parseFloat(row[5]) || 0, isIncome: !!parseFloat(row[4]),
+    })),
+    ...projectCashBookEntries.map((row) => ({
+      date: row[0], description: row[1], badge: row[3],
+      amount: parseFloat(row[4]) || parseFloat(row[5]) || 0, isIncome: !!parseFloat(row[4]),
+    })),
+  ].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
 
   const handleSaveEdit = async () => {
     if (isSaving) return;
@@ -190,20 +208,20 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
           <Plus size={18} /> Add Expense to {project.code}
         </button>
 
-        {/* Recent Expenses */}
-        {projectExpenses.length > 0 && (
+        {/* Recent Expenses (combines Vendors bills + CashBook entries tagged with this project) */}
+        {combinedExpenses.length > 0 && (
           <div>
             <h3 className="text-sm font-semibold text-gray-500 mb-2">
-              Recent Expenses ({projectExpenses.length})
+              Recent Expenses ({combinedExpenses.length})
             </h3>
-            {[...projectExpenses].reverse().slice(0, 10).map((row, i) => (
+            {[...combinedExpenses].reverse().slice(0, 10).map((e, i) => (
               <TransactionRow
                 key={i}
-                date={row[0]}
-                description={`${row[1]} - ${row[2]}`}
-                badge={row[3]}
-                amount={parseFloat(row[4]) || parseFloat(row[5]) || 0}
-                isIncome={!!parseFloat(row[4])}
+                date={e.date}
+                description={e.description}
+                badge={e.badge}
+                amount={e.amount}
+                isIncome={e.isIncome}
               />
             ))}
           </div>

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppData } from '../contexts/DataContext';
 import {
-  computeProjectSpent, computeMonthSurplus, hasEMIBeenLoggedForMonth,
+  computeCombinedProjectSpend, computeMonthSurplus, hasEMIBeenLoggedForMonth,
   emiCashBookDescription, computeUpcomingEMIFundingWarnings,
 } from '../utils/aggregations';
 import { formatCurrency, formatDate, getTodayISO } from '../utils/formatters';
@@ -212,7 +212,7 @@ export default function DashboardPage() {
           </div>
           <div className="space-y-2">
             {activeProjects.slice(0, 4).map((p) => {
-              const spent = computeProjectSpent(vendors.rows, p.code);
+              const spent = computeCombinedProjectSpend(vendors.rows, cashBook.rows, p.code);
               return (
                 <button key={p.code} onClick={() => navigate('/projects')}
                   className="w-full bg-white rounded-xl p-3 shadow-sm text-left">

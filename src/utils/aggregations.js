@@ -64,6 +64,40 @@ export function computeProjectSpent(rows, projectCode) {
   return total;
 }
 
+/**
+ * Sums Money OUT for CashBook entries tagged with a specific project (via
+ * the optional Project column, column index 6 - only ever set on
+ * Type=PROJECT entries, see EntryForm.jsx). This lets money spent on a
+ * project directly through CashBook (not routed through the Vendors tab)
+ * still count toward that project's spend.
+ * @param {string[][]} rows - CashBook rows [Date, Desc, Account, Type, IN, OUT, Project]
+ * @param {string} projectCode - Project code to filter by
+ * @returns {number}
+ */
+export function computeCashBookProjectSpend(rows, projectCode) {
+  let total = 0;
+  for (const row of rows) {
+    if (row[6] === projectCode) {
+      total += parseFloat(row[5]) || 0;
+    }
+  }
+  return total;
+}
+
+/**
+ * Combined project spend across both expense sources: Vendors bills (the
+ * original tracking mechanism) plus CashBook entries directly tagged with
+ * the project. The two are independent workflows/tabs, so there's no
+ * double-counting risk between them.
+ * @param {string[][]} vendorRows - Vendors tab rows
+ * @param {string[][]} cashBookRows - CashBook tab rows
+ * @param {string} projectCode
+ * @returns {number}
+ */
+export function computeCombinedProjectSpend(vendorRows, cashBookRows, projectCode) {
+  return computeProjectSpent(vendorRows, projectCode) + computeCashBookProjectSpend(cashBookRows, projectCode);
+}
+
 /** Standardized CashBook description for an auto-logged/quick-logged EMI entry - kept
  * as one place so the auto-log writer and the "already logged?" detector always agree. */
 export function emiCashBookDescription(loanName) {
@@ -170,6 +204,30 @@ export function computeMonthlyActuals(rows, month) {
     result.set(type, (result.get(type) || 0) + moneyIn - moneyOut);
   }
   return result;
+}
+
+/**
+ * Actual net (IN - OUT) for one specific Monthly Plan: a Category (Type)
+ * within a month, optionally narrowed to a specific Account. Passing no
+ * account matches every account with that Type - identical to
+ * `computeMonthlyActuals`'s per-category total - so a plan left without an
+ * account keeps working exactly as it did before the Account field existed.
+ * @param {string[][]} rows - CashBook rows [Date, Desc, Account, Type, IN, OUT]
+ * @param {string} month - "YYYY-MM"
+ * @param {string} category - matches CashBook Type
+ * @param {string} [account] - optional, narrows to this CashBook Account
+ * @returns {number}
+ */
+export function computeActualForPlan(rows, month, category, account) {
+  let total = 0;
+  for (const row of rows) {
+    const date = row[0] || '';
+    if (!date.startsWith(month)) continue;
+    if ((row[3] || '') !== category) continue;
+    if (account && (row[2] || '') !== account) continue;
+    total += (parseFloat(row[4]) || 0) - (parseFloat(row[5]) || 0);
+  }
+  return total;
 }
 
 /**

@@ -5,13 +5,13 @@ import { BookOpen, Users, FolderKanban, CreditCard, LayoutDashboard, Menu, X, Ca
 const tabs = [
   { to: '/cashbook', icon: BookOpen, label: 'CashBook' },
   { to: '/vendors', icon: Users, label: 'Vendors' },
-  { to: '/projects', icon: FolderKanban, label: 'Projects' },
+  { to: '/monthly', icon: CalendarRange, label: 'Monthly' },
   { to: '/debts', icon: CreditCard, label: 'Debts' },
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
 ];
 
 const moreLinks = [
-  { to: '/monthly', icon: CalendarRange, label: 'Monthly' },
+  { to: '/projects', icon: FolderKanban, label: 'Projects' },
   { to: '/networth', icon: TrendingUp, label: 'Net Worth' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];

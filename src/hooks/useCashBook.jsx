@@ -15,7 +15,9 @@ export function useCashBook() {
       // Bounded range (5000 rows ~ years of daily entries) to avoid an unbounded
       // read as the sheet grows indefinitely. True pagination is deferred to a
       // later phase - see docs/superpowers/mytracker-bugs-and-lessons.md §6.10.
-      const data = await readSheet(token, 'CashBook!A2:F5000');
+      // Column G (Project) is optional - only set for Type=PROJECT entries, so
+      // a project's spend can be tracked directly from CashBook, not just Vendors.
+      const data = await readSheet(token, 'CashBook!A2:G5000');
       setRows(data);
     } catch (err) {
       console.error('Failed to fetch CashBook:', err);
@@ -29,9 +31,9 @@ export function useCashBook() {
   const addEntry = useCallback(async (entry) => {
     const values = [
       entry.date, entry.description, entry.account, entry.type,
-      entry.moneyIn || '', entry.moneyOut || '',
+      entry.moneyIn || '', entry.moneyOut || '', entry.project || '',
     ];
-    await appendRowAt(token, 'CashBook', 'F', rows.length, values);
+    await appendRowAt(token, 'CashBook', 'G', rows.length, values);
     await fetchData();
   }, [token, fetchData, rows]);
 
@@ -39,15 +41,15 @@ export function useCashBook() {
     const sheetRow = rowIndex + 2; // +2 because row 1 is header, data starts at row 2
     const values = [
       entry.date, entry.description, entry.account, entry.type,
-      entry.moneyIn || '', entry.moneyOut || '',
+      entry.moneyIn || '', entry.moneyOut || '', entry.project || '',
     ];
-    await updateRow(token, `CashBook!A${sheetRow}:F${sheetRow}`, values);
+    await updateRow(token, `CashBook!A${sheetRow}:G${sheetRow}`, values);
     await fetchData();
   }, [token, fetchData]);
 
   const deleteEntry = useCallback(async (rowIndex) => {
     const sheetRow = rowIndex + 2;
-    await clearRow(token, `CashBook!A${sheetRow}:F${sheetRow}`);
+    await clearRow(token, `CashBook!A${sheetRow}:G${sheetRow}`);
     await fetchData();
   }, [token, fetchData]);
 

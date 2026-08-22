@@ -62,11 +62,17 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
   // (to avoid re-logging the same payment every time it's corrected).
   const showCashBookLink = type === 'vendors' && form.direction === 'out' && !isEditing;
 
+  // A CashBook entry only asks which project it's for when Type=PROJECT is
+  // selected - money spent on a project directly via CashBook (not routed
+  // through the Vendors tab) then counts toward that project's spend too.
+  const showProjectField = type === 'cashbook' && form.type === 'PROJECT';
+
   const validate = () => {
     if (showAmount[type] && !form.amount) return 'Please enter an amount.';
     if (!showAmount[type] && !form.description) return 'Please enter a description.';
     if (type === 'cashbook' && !form.account) return 'Please select an Account.';
     if (type === 'cashbook' && !form.type) return 'Please select a Type.';
+    if (showProjectField && !form.project) return 'Please select which project this is for.';
     if (type === 'vendors' && !form.vendor) return 'Please select a Vendor.';
     if (showCashBookLink && logToCashBook && !cashBookAccount) {
       return 'Please choose an account to log this payment in CashBook, or uncheck the option.';
@@ -93,6 +99,9 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
         type: form.type,
         moneyIn: form.direction === 'in' ? form.amount : '',
         moneyOut: form.direction === 'out' ? form.amount : '',
+        // Only ever set for Type=PROJECT entries - see isProjectType below -
+        // so this money counts toward that project's spend alongside Vendors bills.
+        project: form.type === 'PROJECT' ? form.project : '',
       };
     } else if (type === 'vendors') {
       payload = {
@@ -181,6 +190,10 @@ export default function EntryForm({ type, lists, onSave, onClose, initialData, o
                 onAddNew={onAddListItem ? (v) => onAddListItem('accounts', v) : undefined} />
               <Dropdown label="Type" options={lists.types} value={form.type} onChange={(v) => set('type', v)}
                 onAddNew={onAddListItem ? (v) => onAddListItem('types', v) : undefined} />
+              {showProjectField && (
+                <Dropdown label="Project" options={lists.projects} value={form.project} onChange={(v) => set('project', v)}
+                  onAddNew={onAddListItem ? (v) => onAddListItem('projects', v) : undefined} />
+              )}
             </>
           )}
 

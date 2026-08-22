@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppData } from '../contexts/DataContext';
-import { computeMonthlyActuals } from '../utils/aggregations';
+import { computeMonthlyActuals, computeActualForPlan } from '../utils/aggregations';
 import { formatCurrency, getTodayISO } from '../utils/formatters';
 import Dropdown from '../components/Dropdown';
 import Toast from '../components/Toast';
@@ -20,8 +20,11 @@ function monthLabel(month) {
   return new Date(y, m - 1, 1).toLocaleString('en', { month: 'long', year: 'numeric' });
 }
 
-function PlanForm({ initial, month, categoryOptions, onAddCategory, onSave, onDelete, onClose, title = 'Planned Category' }) {
-  const [form, setForm] = useState(initial || { category: '', plannedAmount: '', section: SECTIONS[1] });
+function PlanForm({
+  initial, month, categoryOptions, onAddCategory, accountOptions, onAddAccount,
+  onSave, onDelete, onClose, title = 'Planned Category',
+}) {
+  const [form, setForm] = useState(initial || { category: '', plannedAmount: '', section: SECTIONS[1], account: '' });
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -82,6 +85,17 @@ function PlanForm({ initial, month, categoryOptions, onAddCategory, onSave, onDe
               {SECTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
           </div>
+          <Dropdown
+            label="Account (optional)"
+            options={accountOptions || []}
+            value={form.account || ''}
+            onChange={(v) => set('account', v)}
+            onAddNew={onAddAccount}
+          />
+          <p className="text-xs text-gray-400 -mt-2">
+            Leave blank to track Actual across every account for this category. Set an account to narrow it down
+            (e.g. plan "EMI" specifically against HDFC).
+          </p>
 
           <button onClick={handleSubmit} disabled={busy}
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-lg mt-2 disabled:opacity-60">
@@ -113,7 +127,7 @@ function PlanForm({ initial, month, categoryOptions, onAddCategory, onSave, onDe
   );
 }
 
-function TemplateManager({ template, categoryOptions, onAddCategory, onSave, onDelete, onClose }) {
+function TemplateManager({ template, categoryOptions, onAddCategory, accountOptions, onAddAccount, onSave, onDelete, onClose }) {
   const [editingItem, setEditingItem] = useState(undefined); // undefined = list view, null = new item, object = editing
 
   if (editingItem !== undefined) {
@@ -123,13 +137,19 @@ function TemplateManager({ template, categoryOptions, onAddCategory, onSave, onD
         month={null}
         categoryOptions={categoryOptions}
         onAddCategory={onAddCategory}
+        accountOptions={accountOptions}
+        onAddAccount={onAddAccount}
         initial={editingItem ? {
           category: editingItem.category,
           plannedAmount: String(editingItem.defaultPlannedAmount),
           section: editingItem.section,
+          account: editingItem.account,
         } : null}
         onSave={async (entry) => {
-          await onSave(editingItem, { category: entry.category, section: entry.section, defaultPlannedAmount: entry.plannedAmount });
+          await onSave(editingItem, {
+            category: entry.category, section: entry.section,
+            defaultPlannedAmount: entry.plannedAmount, account: entry.account,
+          });
           setEditingItem(undefined);
         }}
         onDelete={editingItem ? async () => { await onDelete(editingItem); setEditingItem(undefined); } : undefined}
@@ -161,7 +181,7 @@ function TemplateManager({ template, categoryOptions, onAddCategory, onSave, onD
                 className="w-full flex items-center justify-between px-3 py-2.5 border-b border-gray-200 last:border-0 text-left active:bg-gray-100">
                 <div>
                   <p className="text-sm text-gray-900">{t.category}</p>
-                  <p className="text-xs text-gray-400">{t.section}</p>
+                  <p className="text-xs text-gray-400">{t.section}{t.account ? ` \u00b7 ${t.account}` : ''}</p>
                 </div>
                 <span className="text-sm text-gray-500">{formatCurrency(t.defaultPlannedAmount)}</span>
               </button>
@@ -184,15 +204,24 @@ export default function MonthlyPage() {
 
   const categoryOptions = lists.lists.types || [];
   const handleAddCategory = (value) => lists.addListItem('types', value);
+  const accountOptions = lists.lists.accounts || [];
+  const handleAddAccount = (value) => lists.addListItem('accounts', value);
 
+  // Actual for a plan with no Account set matches every account for that
+  // Type (the pre-existing, still-supported behavior); a plan with an
+  // Account set narrows to just that account.
   const actuals = computeMonthlyActuals(cashBook.rows, month);
+  const actualForPlan = (p) => (p.account
+    ? computeActualForPlan(cashBook.rows, month, p.category, p.account)
+    : actuals.get(p.category) || 0);
+
   const monthPlans = monthly.plans.filter((p) => p.month === month);
   const hasPlans = monthPlans.length > 0;
   const previousMonth = shiftMonth(month, -1);
   const previousMonthPlans = monthly.plans.filter((p) => p.month === previousMonth);
 
   const totalPlanned = monthPlans.reduce((sum, p) => sum + p.plannedAmount, 0);
-  const totalActual = monthPlans.reduce((sum, p) => sum + (actuals.get(p.category) || 0), 0);
+  const totalActual = monthPlans.reduce((sum, p) => sum + actualForPlan(p), 0);
 
   const handleSave = async (entry) => {
     try {
@@ -317,12 +346,15 @@ export default function MonthlyPage() {
               <h3 className="text-xs font-semibold text-gray-400 uppercase mb-1">{section}</h3>
               <div className="bg-white rounded-xl shadow-sm overflow-hidden">
                 {sectionPlans.map((p) => {
-                  const actual = actuals.get(p.category) || 0;
+                  const actual = actualForPlan(p);
                   const diff = actual - p.plannedAmount;
                   return (
                     <button key={p._rowIndex} onClick={() => { setEditingPlan(p); setShowForm(true); }}
                       className="w-full flex items-center justify-between px-3 py-2.5 border-b border-gray-100 last:border-0 text-left active:bg-gray-50">
-                      <span className="text-sm text-gray-900">{p.category}</span>
+                      <div>
+                        <span className="text-sm text-gray-900">{p.category}</span>
+                        {p.account && <p className="text-xs text-gray-400">{p.account}</p>}
+                      </div>
                       <div className="text-right text-xs">
                         <p className="text-gray-500">Plan: {formatCurrency(p.plannedAmount)}</p>
                         <p className={diff >= 0 ? 'text-success' : 'text-danger'}>Actual: {formatCurrency(actual)}</p>
@@ -341,7 +373,12 @@ export default function MonthlyPage() {
           month={month}
           categoryOptions={categoryOptions}
           onAddCategory={handleAddCategory}
-          initial={editingPlan ? { category: editingPlan.category, plannedAmount: String(editingPlan.plannedAmount), section: editingPlan.section } : null}
+          accountOptions={accountOptions}
+          onAddAccount={handleAddAccount}
+          initial={editingPlan ? {
+            category: editingPlan.category, plannedAmount: String(editingPlan.plannedAmount),
+            section: editingPlan.section, account: editingPlan.account,
+          } : null}
           onSave={handleSave}
           onDelete={editingPlan ? handleDelete : undefined}
           onClose={() => { setShowForm(false); setEditingPlan(null); }}
@@ -353,6 +390,8 @@ export default function MonthlyPage() {
           template={monthly.template}
           categoryOptions={categoryOptions}
           onAddCategory={handleAddCategory}
+          accountOptions={accountOptions}
+          onAddAccount={handleAddAccount}
           onSave={handleSaveTemplateItem}
           onDelete={handleDeleteTemplateItem}
           onClose={() => setShowTemplate(false)}

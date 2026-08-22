@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppData } from '../contexts/DataContext';
-import { computeProjectSpent } from '../utils/aggregations';
+import { computeCombinedProjectSpend } from '../utils/aggregations';
 import ProjectCard from '../components/ProjectCard';
 import ProjectDetail from '../components/ProjectDetail';
 import FAB from '../components/FAB';
@@ -10,10 +10,11 @@ import EntryForm from '../components/EntryForm';
 import { formatCurrency, getTodayISO } from '../utils/formatters';
 
 export default function ProjectsPage() {
-  const { projects: projectsData, vendors, lists: listsData } = useAppData();
+  const { projects: projectsData, vendors, cashBook, lists: listsData } = useAppData();
   const { projects, milestones, isLoading, addProject, editProject, addMilestone, refresh: refreshProjects } = projectsData;
   const { rows: vendorRows, addEntry: addVendorEntry, refresh: refreshVendors } = vendors;
   const { lists, addListItem } = listsData;
+  const projectSpent = (code) => computeCombinedProjectSpend(vendorRows, cashBook.rows, code);
   const [selectedProject, setSelectedProject] = useState(null);
   const [showForm, setShowForm] = useState(null); // null | 'project' | 'milestone' | 'expense'
   const [toast, setToast] = useState(null);
@@ -65,7 +66,7 @@ export default function ProjectsPage() {
   };
 
   const totalBudget = projects.reduce((sum, p) => sum + p.budget, 0);
-  const totalSpent = projects.reduce((sum, p) => sum + computeProjectSpent(vendorRows, p.code), 0);
+  const totalSpent = projects.reduce((sum, p) => sum + projectSpent(p.code), 0);
 
   return (
     <div>
@@ -90,7 +91,7 @@ export default function ProjectsPage() {
             <ProjectCard
               key={project.code}
               project={project}
-              spent={computeProjectSpent(vendorRows, project.code)}
+              spent={projectSpent(project.code)}
               onClick={() => setSelectedProject(project)}
             />
           ))
@@ -102,9 +103,10 @@ export default function ProjectsPage() {
       {selectedProject && !showForm && (
         <ProjectDetail
           project={selectedProject}
-          spent={computeProjectSpent(vendorRows, selectedProject.code)}
+          spent={projectSpent(selectedProject.code)}
           milestones={milestones}
           vendorRows={vendorRows}
+          cashBookRows={cashBook.rows}
           onAddMilestone={() => setShowForm('milestone')}
           onAddExpense={() => setShowForm('expense')}
           onEditProject={handleEditProject}

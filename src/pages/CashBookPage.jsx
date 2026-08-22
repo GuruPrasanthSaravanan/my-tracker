@@ -95,6 +95,7 @@ export default function CashBookPage() {
         type: row[3] || '',
         amount: String(moneyIn || parseFloat(row[5]) || ''),
         direction: moneyIn ? 'in' : 'out',
+        project: row[6] || '',
       },
     });
   };

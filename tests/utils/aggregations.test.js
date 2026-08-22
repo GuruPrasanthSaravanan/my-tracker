@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   sumByField, computeVendorBalances, computeAccountBalances, computeProjectSpent, computeCashBookSpendForAccount,
-  computeMonthlyActuals, computeMonthSurplus, hasEMIBeenLoggedForMonth, computeUpcomingEMIFundingWarnings,
+  computeCashBookProjectSpend, computeCombinedProjectSpend,
+  computeMonthlyActuals, computeActualForPlan, computeMonthSurplus, hasEMIBeenLoggedForMonth, computeUpcomingEMIFundingWarnings,
 } from '../../src/utils/aggregations';
 
 describe('sumByField', () => {
@@ -57,6 +58,32 @@ describe('computeProjectSpent', () => {
   });
 });
 
+describe('computeCashBookProjectSpend / computeCombinedProjectSpend', () => {
+  const cashBookRows = [
+    ['2026-09-01', 'Cement direct purchase', 'ICICI', 'PROJECT', '', '18000', 'Constr'],
+    ['2026-09-02', 'Site visit fuel', 'ICICI', 'PROJECT', '', '2000', 'Constr'],
+    ['2026-09-03', 'Salary', 'ICICI', 'SALARY', '153000', '', ''],
+    ['2026-09-04', 'Paint direct', 'HDFC', 'PROJECT', '', '5000', 'Reno'],
+  ];
+  const vendorRows = [
+    ['1-Sep', 'Raju', 'Cement', 'Constr', '18000', ''],
+  ];
+
+  it('sums CashBook Money OUT tagged with a project via the optional Project column', () => {
+    expect(computeCashBookProjectSpend(cashBookRows, 'Constr')).toBe(20000);
+    expect(computeCashBookProjectSpend(cashBookRows, 'Reno')).toBe(5000);
+    expect(computeCashBookProjectSpend(cashBookRows, 'Land')).toBe(0);
+  });
+
+  it('ignores non-project entries even if they happen to have no project tag', () => {
+    expect(computeCashBookProjectSpend(cashBookRows, '')).toBe(0);
+  });
+
+  it('combines Vendors bills and tagged CashBook entries into one total', () => {
+    expect(computeCombinedProjectSpend(vendorRows, cashBookRows, 'Constr')).toBe(18000 + 20000);
+  });
+});
+
 describe('computeMonthlyActuals', () => {
   const rows = [
     ['2026-09-01', 'Salary', 'ICICI', 'SALARY', '153000', ''],
@@ -77,6 +104,28 @@ describe('computeMonthlyActuals', () => {
     const result = computeMonthlyActuals(rows, '2026-10');
     expect(result.get('SALARY')).toBe(153000);
     expect(result.has('EMI')).toBe(false);
+  });
+});
+
+describe('computeActualForPlan', () => {
+  const rows = [
+    ['2026-09-05', 'Land Loan EMI', 'HDFC', 'EMI', '', '21000'],
+    ['2026-09-06', 'Car Loan EMI', 'ICICI', 'EMI', '', '10000'],
+    ['2026-10-05', 'Land Loan EMI', 'HDFC', 'EMI', '', '21000'],
+  ];
+
+  it('matches every account with the category when no account is given (same as computeMonthlyActuals)', () => {
+    expect(computeActualForPlan(rows, '2026-09', 'EMI')).toBe(-31000);
+  });
+
+  it('narrows to just the given account when specified', () => {
+    expect(computeActualForPlan(rows, '2026-09', 'EMI', 'HDFC')).toBe(-21000);
+    expect(computeActualForPlan(rows, '2026-09', 'EMI', 'ICICI')).toBe(-10000);
+  });
+
+  it('returns 0 for a category/account/month combination with no matches', () => {
+    expect(computeActualForPlan(rows, '2026-09', 'EMI', 'AXIS')).toBe(0);
+    expect(computeActualForPlan(rows, '2026-11', 'EMI', 'HDFC')).toBe(0);
   });
 });
 
