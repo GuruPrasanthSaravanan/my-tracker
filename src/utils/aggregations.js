@@ -64,6 +64,72 @@ export function computeProjectSpent(rows, projectCode) {
   return total;
 }
 
+/** Standardized CashBook description for an auto-logged/quick-logged EMI entry - kept
+ * as one place so the auto-log writer and the "already logged?" detector always agree. */
+export function emiCashBookDescription(loanName) {
+  return `${loanName} - EMI`;
+}
+
+/**
+ * Checks whether a matching EMI CashBook entry already exists for a given
+ * loan and month, so an auto-logger doesn't create a duplicate entry on
+ * every app load. Matches on Account + Type=EMI + the standardized
+ * description + the entry's date falling in the given month.
+ * @param {string[][]} cashBookRows - CashBook rows [Date, Desc, Account, Type, IN, OUT]
+ * @param {{ name: string, debitsFrom: string }} loan
+ * @param {string} month - "YYYY-MM"
+ */
+export function hasEMIBeenLoggedForMonth(cashBookRows, loan, month) {
+  const desc = emiCashBookDescription(loan.name);
+  return cashBookRows.some((row) =>
+    (row[0] || '').startsWith(month) && row[1] === desc && row[2] === loan.debitsFrom && row[3] === 'EMI'
+  );
+}
+
+/**
+ * For EMI loans with an installment due *later this month* (not yet due,
+ * so not yet auto-logged), checks whether the paying account's current
+ * balance - minus its configured minimum balance buffer - can actually
+ * cover the total upcoming EMI(s) for that account. Surfaces a shortfall
+ * warning from the start of the month (as soon as the balance is
+ * insufficient), not just on the due date itself, so there's time to
+ * transfer funds in. Multiple loans debiting the same account are summed
+ * together.
+ * @param {Array} loans - parsed EMI loan objects (each with .status, .debitsFrom, .emiStatus.{nextDueDate,emi})
+ * @param {Map<string, number>} accountBalances - from useCashBook
+ * @param {Map<string, number>} minBalances - from useAccountSettings
+ * @param {string} today - "YYYY-MM-DD"
+ * @returns {{ account: string, requiredAmount: number, currentBalance: number, shortfall: number, loanNames: string[] }[]}
+ */
+export function computeUpcomingEMIFundingWarnings(loans, accountBalances, minBalances, today) {
+  const currentMonth = today.slice(0, 7);
+  const byAccount = new Map();
+
+  for (const loan of loans) {
+    if (loan.status === 'Closed' || !loan.debitsFrom) continue;
+    const due = loan.emiStatus?.nextDueDate;
+    // Only "upcoming, not yet due" installments this month - once the due
+    // date arrives, the auto-logger takes over instead of this warning.
+    if (!due || !due.startsWith(currentMonth) || due <= today) continue;
+
+    const entry = byAccount.get(loan.debitsFrom) || { requiredAmount: 0, loanNames: [] };
+    entry.requiredAmount += loan.emiStatus.emi;
+    entry.loanNames.push(loan.name);
+    byAccount.set(loan.debitsFrom, entry);
+  }
+
+  const warnings = [];
+  for (const [account, { requiredAmount, loanNames }] of byAccount) {
+    const currentBalance = accountBalances.get(account) || 0;
+    const minBalance = minBalances.get(account) || 0;
+    const available = currentBalance - minBalance;
+    if (available < requiredAmount) {
+      warnings.push({ account, requiredAmount, currentBalance, shortfall: requiredAmount - available, loanNames });
+    }
+  }
+  return warnings;
+}
+
 /**
  * Sums CashBook Money IN/OUT grouped by Type, for entries within a given
  * month, giving the "Actual" side of a Planned-vs-Actual comparison. Always

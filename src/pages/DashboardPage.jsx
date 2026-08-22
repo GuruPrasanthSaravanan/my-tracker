@@ -1,18 +1,71 @@
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppData } from '../contexts/DataContext';
-import { computeProjectSpent, computeMonthSurplus } from '../utils/aggregations';
+import {
+  computeProjectSpent, computeMonthSurplus, hasEMIBeenLoggedForMonth,
+  emiCashBookDescription, computeUpcomingEMIFundingWarnings,
+} from '../utils/aggregations';
 import { formatCurrency, formatDate, getTodayISO } from '../utils/formatters';
 import ProgressBar from '../components/ProgressBar';
-import { Plus, ArrowRight, ArrowLeftRight } from 'lucide-react';
+import Toast from '../components/Toast';
+import { Plus, ArrowRight, ArrowLeftRight, AlertTriangle } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { cashBook, vendors, projects, emiLoans, handLoans, creditCards } = useAppData();
+  const { cashBook, vendors, projects, emiLoans, handLoans, creditCards, accountSettings } = useAppData();
   const navigate = useNavigate();
+  const [toast, setToast] = useState(null);
+
+  // Silently logs this month's EMI to CashBook once its due date has passed,
+  // for any active loan that doesn't already have a matching entry - see
+  // bugs-and-lessons.md for why this can't run in the background (no
+  // server) and instead runs the moment the Dashboard is opened. Guarded by
+  // a ref (set before the async work starts) so React 18 StrictMode's
+  // double-invoke in dev, or a re-render before cashBook's state catches up,
+  // can't fire this twice in the same mount.
+  const autoLogRanRef = useRef(false);
+  useEffect(() => {
+    if (cashBook.isLoading || emiLoans.isLoading) return;
+    if (autoLogRanRef.current) return;
+    autoLogRanRef.current = true;
+
+    const today = getTodayISO();
+    const dueLoans = emiLoans.loans.filter((loan) => {
+      if (loan.status === 'Closed' || !loan.debitsFrom) return false;
+      const due = loan.emiStatus?.nextDueDate;
+      if (!due || due > today) return false;
+      return !hasEMIBeenLoggedForMonth(cashBook.rows, loan, due.slice(0, 7));
+    });
+    if (dueLoans.length === 0) return;
+
+    (async () => {
+      for (const loan of dueLoans) {
+        try {
+          await cashBook.addEntry({
+            date: loan.emiStatus.nextDueDate,
+            description: emiCashBookDescription(loan.name),
+            account: loan.debitsFrom,
+            type: 'EMI',
+            moneyOut: loan.emiStatus.emi,
+          });
+          setToast({ message: `Auto-logged this month's EMI for ${loan.name} (${formatCurrency(loan.emiStatus.emi)})`, type: 'success' });
+        } catch {
+          setToast({ message: `Couldn't auto-log ${loan.name}'s EMI - please add it manually in CashBook.`, type: 'error' });
+        }
+      }
+    })();
+  }, [cashBook.isLoading, emiLoans.isLoading]);
 
   const currentMonth = getTodayISO().slice(0, 7); // "YYYY-MM"
   const { surplus, totalIn, totalOut } = computeMonthSurplus(cashBook.rows, currentMonth);
 
   const totalDebtOutstanding = emiLoans.totalOutstanding + handLoans.totalOwed + creditCards.totalOutstanding;
+
+  // Live from day 1 of the month: flags any account that won't have enough
+  // balance to cover an EMI due later this month, so there's time to
+  // transfer funds in before the auto-logger fires on the due date.
+  const fundingWarnings = computeUpcomingEMIFundingWarnings(
+    emiLoans.loans, cashBook.accountBalances, accountSettings.minBalances, getTodayISO()
+  );
 
   const activeProjects = projects.projects.filter((p) => p.status !== 'Completed');
 
@@ -78,6 +131,22 @@ export default function DashboardPage() {
         <span>Outflow: <span className="text-gray-900 font-medium">{formatCurrency(totalOut)}</span></span>
       </div>
 
+      {/* Insufficient-funds warnings for EMIs due later this month */}
+      {fundingWarnings.map((w) => (
+        <div key={w.account} className="bg-red-50 rounded-2xl p-4 flex items-start gap-2">
+          <AlertTriangle size={18} className="text-danger shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm text-danger font-semibold">
+              {w.account} may be short by {formatCurrency(w.shortfall)}
+            </p>
+            <p className="text-xs text-gray-600 mt-0.5">
+              {w.loanNames.join(', ')} need{w.loanNames.length === 1 ? 's' : ''} {formatCurrency(w.requiredAmount)} this
+              month, but {w.account}'s current balance is {formatCurrency(w.currentBalance)}. Transfer funds in before the due date.
+            </p>
+          </div>
+        </div>
+      ))}
+
       {/* Next due (nearest of: milestone, EMI, or credit card bill) */}
       {nextDue && (
         <button onClick={() => navigate(nextDue.to)} className="w-full bg-amber-50 rounded-2xl p-4 text-left">
@@ -126,6 +195,8 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {toast && <Toast {...toast} onClose={() => setToast(null)} />}
     </div>
   );
 }

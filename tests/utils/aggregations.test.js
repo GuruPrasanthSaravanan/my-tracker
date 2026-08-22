@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { sumByField, computeVendorBalances, computeAccountBalances, computeProjectSpent, computeCashBookSpendForAccount, computeMonthlyActuals, computeMonthSurplus } from '../../src/utils/aggregations';
+import {
+  sumByField, computeVendorBalances, computeAccountBalances, computeProjectSpent, computeCashBookSpendForAccount,
+  computeMonthlyActuals, computeMonthSurplus, hasEMIBeenLoggedForMonth, computeUpcomingEMIFundingWarnings,
+} from '../../src/utils/aggregations';
 
 describe('sumByField', () => {
   it('sums values grouped by a field', () => {
@@ -95,6 +98,84 @@ describe('computeMonthSurplus', () => {
   it('returns zeroes for a month with no entries', () => {
     const result = computeMonthSurplus(rows, '2026-01');
     expect(result).toEqual({ totalIn: 0, totalOut: 0, surplus: 0 });
+  });
+});
+
+describe('hasEMIBeenLoggedForMonth', () => {
+  const loan = { name: 'Land Loan', debitsFrom: 'HDFC' };
+
+  it('finds a matching entry for the given month', () => {
+    const rows = [
+      ['2026-09-05', 'Land Loan - EMI', 'HDFC', 'EMI', '', '21000'],
+    ];
+    expect(hasEMIBeenLoggedForMonth(rows, loan, '2026-09')).toBe(true);
+  });
+
+  it('does not match a different loan, account, type, or month', () => {
+    const rows = [
+      ['2026-09-05', 'Car Loan - EMI', 'HDFC', 'EMI', '', '21000'], // different loan name
+      ['2026-09-05', 'Land Loan - EMI', 'ICICI', 'EMI', '', '21000'], // different account
+      ['2026-09-05', 'Land Loan - EMI', 'HDFC', 'DEBT', '', '21000'], // different type
+      ['2026-08-05', 'Land Loan - EMI', 'HDFC', 'EMI', '', '21000'], // different month
+    ];
+    expect(hasEMIBeenLoggedForMonth(rows, loan, '2026-09')).toBe(false);
+  });
+});
+
+describe('computeUpcomingEMIFundingWarnings', () => {
+  const today = '2026-09-10';
+
+  it('flags a shortfall when the account balance cannot cover an upcoming EMI this month', () => {
+    const loans = [
+      { status: 'Active', debitsFrom: 'HDFC', name: 'Land Loan', emiStatus: { nextDueDate: '2026-09-20', emi: 21000 } },
+    ];
+    const accountBalances = new Map([['HDFC', 15000]]);
+    const minBalances = new Map();
+    const warnings = computeUpcomingEMIFundingWarnings(loans, accountBalances, minBalances, today);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatchObject({ account: 'HDFC', requiredAmount: 21000, currentBalance: 15000, shortfall: 6000 });
+    expect(warnings[0].loanNames).toEqual(['Land Loan']);
+  });
+
+  it('accounts for the configured minimum balance buffer', () => {
+    const loans = [
+      { status: 'Active', debitsFrom: 'HDFC', name: 'Land Loan', emiStatus: { nextDueDate: '2026-09-20', emi: 21000 } },
+    ];
+    const accountBalances = new Map([['HDFC', 25000]]);
+    const minBalances = new Map([['HDFC', 10000]]); // only 15000 actually available
+    const warnings = computeUpcomingEMIFundingWarnings(loans, accountBalances, minBalances, today);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].shortfall).toBe(6000);
+  });
+
+  it('sums multiple loans debiting the same account', () => {
+    const loans = [
+      { status: 'Active', debitsFrom: 'HDFC', name: 'Land Loan', emiStatus: { nextDueDate: '2026-09-20', emi: 21000 } },
+      { status: 'Active', debitsFrom: 'HDFC', name: 'Car Loan', emiStatus: { nextDueDate: '2026-09-25', emi: 10000 } },
+    ];
+    const accountBalances = new Map([['HDFC', 25000]]);
+    const warnings = computeUpcomingEMIFundingWarnings(loans, accountBalances, new Map(), today);
+    expect(warnings[0].requiredAmount).toBe(31000);
+    expect(warnings[0].loanNames).toEqual(['Land Loan', 'Car Loan']);
+  });
+
+  it('does not warn when the balance is sufficient', () => {
+    const loans = [
+      { status: 'Active', debitsFrom: 'HDFC', name: 'Land Loan', emiStatus: { nextDueDate: '2026-09-20', emi: 21000 } },
+    ];
+    const accountBalances = new Map([['HDFC', 50000]]);
+    expect(computeUpcomingEMIFundingWarnings(loans, accountBalances, new Map(), today)).toHaveLength(0);
+  });
+
+  it('ignores closed loans, loans with no DebitsFrom, and dates already due or in a different month', () => {
+    const loans = [
+      { status: 'Closed', debitsFrom: 'HDFC', name: 'Closed Loan', emiStatus: { nextDueDate: '2026-09-20', emi: 99999 } },
+      { status: 'Active', debitsFrom: '', name: 'No Account Loan', emiStatus: { nextDueDate: '2026-09-20', emi: 99999 } },
+      { status: 'Active', debitsFrom: 'ICICI', name: 'Already Due', emiStatus: { nextDueDate: '2026-09-05', emi: 99999 } },
+      { status: 'Active', debitsFrom: 'AXIS', name: 'Next Month', emiStatus: { nextDueDate: '2026-10-05', emi: 99999 } },
+    ];
+    const accountBalances = new Map(); // empty balances - would definitely warn if any of these were counted
+    expect(computeUpcomingEMIFundingWarnings(loans, accountBalances, new Map(), today)).toHaveLength(0);
   });
 });
 
