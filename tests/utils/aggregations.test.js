@@ -5,6 +5,7 @@ import {
   computeMonthlyActuals, computeActualForPlan, computeActualForTransferPlan, computeMonthSurplus,
   hasEMIBeenLoggedForMonth, computeUpcomingEMIFundingWarnings,
   computeTypeFrequencyForAccount, orderTypeOptionsForAccount, computeTypeSpendBreakdown, computeSubCategorySpendBreakdown,
+  computePlannedBreakdown,
 } from '../../src/utils/aggregations';
 
 describe('sumByField', () => {
@@ -430,6 +431,33 @@ describe('computeSubCategorySpendBreakdown', () => {
     expect(breakdown.get('Entertainment')).toBe(1000);
     expect(breakdown.get('(uncategorized)')).toBe(500);
     expect(breakdown.has('EMI')).toBe(false);
+  });
+});
+
+describe('computePlannedBreakdown', () => {
+  it('sums PlannedAmount per category from already-filtered month plans', () => {
+    const monthPlans = [
+      { category: 'EMI', plannedAmount: 21000 },
+      { category: 'FAMILY', plannedAmount: 8000 },
+      { category: 'EMI', plannedAmount: 10000 }, // a second EMI plan (e.g. narrowed to a different account)
+    ];
+    const breakdown = computePlannedBreakdown(monthPlans);
+    expect(breakdown.get('EMI')).toBe(31000);
+    expect(breakdown.get('FAMILY')).toBe(8000);
+  });
+
+  it('returns an empty map for no plans', () => {
+    expect(computePlannedBreakdown([]).size).toBe(0);
+  });
+
+  it('skips a plan with no category and treats a missing plannedAmount as 0', () => {
+    const monthPlans = [
+      { category: '', plannedAmount: 5000 },
+      { category: 'FAMILY', plannedAmount: undefined },
+    ];
+    const breakdown = computePlannedBreakdown(monthPlans);
+    expect(breakdown.has('')).toBe(false);
+    expect(breakdown.get('FAMILY')).toBe(0);
   });
 });
 

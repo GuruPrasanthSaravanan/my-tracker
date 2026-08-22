@@ -394,6 +394,25 @@ export function computeSubCategorySpendBreakdown(rows, month, type) {
 }
 
 /**
+ * Category-level Planned breakdown for a month, for the Monthly page's
+ * "Planned" pie chart (a companion to computeTypeSpendBreakdown's "Actual"
+ * pie) - sums PlannedAmount by Category. Unlike the Actual breakdown, this
+ * doesn't need to touch CashBook at all: Monthly Plans are already
+ * category-keyed, so it's a plain group-and-sum over already-parsed plan
+ * objects for the month (see useMonthly.jsx), not raw sheet rows.
+ * @param {{ category: string, plannedAmount: number }[]} monthPlans - plans already filtered to one month
+ * @returns {Map<string, number>} Category -> total Planned Amount
+ */
+export function computePlannedBreakdown(monthPlans) {
+  const result = new Map();
+  for (const plan of monthPlans) {
+    if (!plan.category) continue;
+    result.set(plan.category, (result.get(plan.category) || 0) + (plan.plannedAmount || 0));
+  }
+  return result;
+}
+
+/**
  * Projects a credit card's upcoming bill from CashBook activity, by treating
  * the card as a "virtual account" - every purchase on the card is logged as
  * a normal CashBook entry with Account = the card's exact name (Money Out for

@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { useAppData } from '../contexts/DataContext';
 import {
   computeMonthlyActuals, computeActualForPlan, computeActualForTransferPlan,
-  computeTypeSpendBreakdown, computeSubCategorySpendBreakdown,
+  computeTypeSpendBreakdown, computeSubCategorySpendBreakdown, computePlannedBreakdown,
 } from '../utils/aggregations';
 import { formatCurrency, getTodayISO } from '../utils/formatters';
 import Dropdown from '../components/Dropdown';
 import PieChart from '../components/PieChart';
+import BarChart from '../components/BarChart';
 import Toast from '../components/Toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import { ChevronLeft, ChevronRight, Plus, X, Trash2, Settings2, ArrowLeft, Download } from 'lucide-react';
@@ -337,15 +338,30 @@ export default function MonthlyPage() {
   const totalPlanned = monthPlans.reduce((sum, p) => sum + p.plannedAmount, 0);
   const totalActual = monthPlans.reduce((sum, p) => sum + actualForPlan(p), 0);
 
-  // Spending breakdown pie chart: Type-level by default, drills into a
-  // Type's Sub-categories when one is selected (e.g. tap "WANTS" to see
+  // Actual spending breakdown pie chart: Type-level by default, drills into
+  // a Type's Sub-categories when one is selected (e.g. tap "WANTS" to see
   // Dining vs Shopping vs Entertainment).
   const typeBreakdown = computeTypeSpendBreakdown(cashBook.rows, month);
   const subCategoryBreakdown = drillIntoType ? computeSubCategorySpendBreakdown(cashBook.rows, month, drillIntoType) : null;
-  const pieData = (drillIntoType ? subCategoryBreakdown : typeBreakdown);
-  const pieChartData = Array.from(pieData?.entries() || [])
+  const actualPieData = (drillIntoType ? subCategoryBreakdown : typeBreakdown);
+  const actualPieChartData = Array.from(actualPieData?.entries() || [])
     .map(([label, value]) => ({ label, value }))
     .sort((a, b) => b.value - a.value);
+
+  // Planned breakdown pie chart - a companion to the Actual one above, but
+  // sourced straight from this month's plans (no CashBook needed) since
+  // Planned amounts are already category-keyed. No drill-down - Monthly
+  // Plans don't have a sub-category dimension.
+  const plannedBreakdown = computePlannedBreakdown(monthPlans);
+  const plannedPieChartData = Array.from(plannedBreakdown.entries())
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value);
+
+  // Planned vs Actual bar chart - one row per category actually planned
+  // this month, so it's directly comparable to the Categories list below.
+  const barChartData = monthPlans
+    .map((p) => ({ label: accountLabel(p) ? `${p.category} (${accountLabel(p)})` : p.category, planned: p.plannedAmount, actual: actualForPlan(p) }))
+    .sort((a, b) => b.planned - a.planned);
 
   const handleSave = async (entry) => {
     try {
@@ -441,7 +457,13 @@ export default function MonthlyPage() {
         </div>
       </div>
 
-      {/* Spending breakdown: Type-level pie by default, drills into a Type's
+      {/* Planned breakdown pie - what you intended to spend, by category. */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
+        <h2 className="text-sm font-semibold text-gray-500 mb-2">Planned Breakdown</h2>
+        <PieChart data={plannedPieChartData} />
+      </div>
+
+      {/* Actual breakdown pie: Type-level by default, drills into a Type's
           Sub-categories when one is tapped. */}
       <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
         <div className="flex items-center gap-2 mb-2">
@@ -449,16 +471,23 @@ export default function MonthlyPage() {
             <button onClick={() => setDrillIntoType(null)} className="text-gray-400"><ArrowLeft size={16} /></button>
           )}
           <h2 className="text-sm font-semibold text-gray-500">
-            {drillIntoType ? `${drillIntoType} - by Sub-category` : 'Spending Breakdown'}
+            {drillIntoType ? `${drillIntoType} - by Sub-category` : 'Actual Breakdown'}
           </h2>
         </div>
         <PieChart
-          data={pieChartData}
+          data={actualPieChartData}
           onSliceClick={drillIntoType ? undefined : (label) => setDrillIntoType(label)}
         />
-        {!drillIntoType && pieChartData.length > 0 && (
+        {!drillIntoType && actualPieChartData.length > 0 && (
           <p className="text-xs text-gray-400 mt-2">Tap a category to see its sub-category breakdown.</p>
         )}
+      </div>
+
+      {/* Planned vs Actual bar chart - one row per planned category, so you
+          can see at a glance which ones are running over. */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
+        <h2 className="text-sm font-semibold text-gray-500 mb-3">Planned vs Actual</h2>
+        <BarChart data={barChartData} />
       </div>
 
       {!hasPlans && previousMonthPlans.length > 0 && (
