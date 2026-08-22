@@ -10,12 +10,12 @@ import { getTodayISO } from '../utils/formatters';
  * bugs-and-lessons.md for why this needed its own flow rather than just
  * telling the user to add two CashBook entries themselves.
  */
-export default function TransferForm({ accountOptions, onAddAccount, onSave, onClose }) {
+export default function TransferForm({ accountOptions, onAddAccount, onSave, onClose, initial }) {
   const [date, setDate] = useState(getTodayISO());
-  const [fromAccount, setFromAccount] = useState('');
-  const [toAccount, setToAccount] = useState('');
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
+  const [fromAccount, setFromAccount] = useState(initial?.fromAccount || '');
+  const [toAccount, setToAccount] = useState(initial?.toAccount || '');
+  const [amount, setAmount] = useState(initial?.amount != null ? String(initial.amount) : '');
+  const [description, setDescription] = useState(initial?.description || '');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
 

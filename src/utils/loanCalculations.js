@@ -157,11 +157,19 @@ export function computeEMIStatus(loan, asOfDate = new Date(), extraPayments = []
   const totalInterestPayable = schedule.reduce((sum, row) => sum + row.interest, 0);
   const totalExtraPaid = extraPayments.reduce((sum, p) => sum + p.amount, 0);
 
-  // Next EMI due date = start date + installmentsPaid months, pinned to the
-  // configured EMI day-of-month (or the start date's day if none was given).
+  // Next EMI due date. `countElapsedInstallments` structurally can never
+  // count an installment as elapsed within the loan's own disbursal month -
+  // moving to a later month is required before the count can reach 1,
+  // regardless of how the EMI day-of-month compares to the disbursal day
+  // (see its docstring/tests). So the very next due date is always at least
+  // one full month after the disbursal month, then + installmentsPaid more.
+  // Without the "+1", a loan disbursed after its EMI day-of-month (e.g.
+  // disbursed the 24th with EMI date the 7th) would compute a first due
+  // date *before* disbursal (the 7th of the disbursal month itself) - a
+  // real bug reported in production.
   const nextDueDate = new Date(start);
   if (loan.emiDate) nextDueDate.setDate(loan.emiDate);
-  nextDueDate.setMonth(nextDueDate.getMonth() + installmentsPaid);
+  nextDueDate.setMonth(nextDueDate.getMonth() + 1 + installmentsPaid);
 
   return {
     emi,

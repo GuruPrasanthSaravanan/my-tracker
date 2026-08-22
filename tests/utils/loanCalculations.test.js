@@ -132,7 +132,9 @@ describe('computeEMIStatus', () => {
 
     expect(status.effectiveTenureMonths).toBeLessThan(status.originalTenureMonths);
     expect(status.totalExtraPaid).toBe(30000);
-    expect(status.nextDueDate).toBe('2026-04-01');
+    // 3 installments already elapsed as of Apr 1 (Feb 1, Mar 1, Apr 1) - the
+    // NEXT (not-yet-elapsed) one is May 1, not Apr 1 itself.
+    expect(status.nextDueDate).toBe('2026-05-01');
   });
 
   it('uses the emiDate to avoid over-counting installments near month boundaries', () => {
@@ -147,6 +149,41 @@ describe('computeEMIStatus', () => {
 
     expect(status.installmentsPaid).toBe(0);
     expect(status.outstandingBalance).toBe(100000);
+  });
+
+  it('never places the first due date before disbursal, even when the EMI day-of-month is earlier than the disbursal day', () => {
+    // Reported bug: disbursed Aug 24, EMI day 7 - naively swapping in day 7
+    // within the disbursal month produces Aug 7, which precedes disbursal.
+    // The real first due date must be the *next* month's occurrence: Sep 7.
+    const status = computeEMIStatus({
+      principal: 500000,
+      annualRate: 9,
+      tenureMonths: 60,
+      startDate: '2026-08-24',
+      emiDate: 7,
+    }, '2026-08-25');
+
+    expect(status.installmentsPaid).toBe(0);
+    expect(status.nextDueDate).toBe('2026-09-07');
+    expect(new Date(status.nextDueDate) >= new Date('2026-08-24')).toBe(true);
+  });
+
+  it('places the first due date in the disbursal month itself when the EMI day-of-month is later than the disbursal day', () => {
+    // Disbursed Aug 5, EMI day 7 - Aug 7 is still >= the disbursal date, so
+    // it's a valid same-month first due date... but per countElapsedInstallments's
+    // own same-month-is-always-zero rule, the first *elapsed* installment
+    // still can't be counted until the following month - so nextDueDate is
+    // consistently one full month out from disbursal regardless.
+    const status = computeEMIStatus({
+      principal: 500000,
+      annualRate: 9,
+      tenureMonths: 60,
+      startDate: '2026-08-05',
+      emiDate: 7,
+    }, '2026-08-06');
+
+    expect(status.installmentsPaid).toBe(0);
+    expect(status.nextDueDate).toBe('2026-09-07');
   });
 
   it('uses actualEMI to report the bank-billed amount instead of the theoretical one', () => {

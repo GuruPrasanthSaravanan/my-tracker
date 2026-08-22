@@ -167,6 +167,35 @@ describe('computeUpcomingEMIFundingWarnings', () => {
     expect(computeUpcomingEMIFundingWarnings(loans, accountBalances, new Map(), today)).toHaveLength(0);
   });
 
+  it('suggests the account with the largest available surplus as a transfer source', () => {
+    const loans = [
+      { status: 'Active', debitsFrom: 'HDFC', name: 'Land Loan', emiStatus: { nextDueDate: '2026-09-20', emi: 21000 } },
+      { status: 'Active', debitsFrom: 'HDFC', name: 'Car Loan', emiStatus: { nextDueDate: '2026-09-25', emi: 10000 } },
+    ];
+    const accountBalances = new Map([['HDFC', 15000], ['ICICI', 80000], ['AXIS', 40000]]);
+    const minBalances = new Map([['ICICI', 10000], ['AXIS', 5000]]); // ICICI available: 70000, AXIS available: 35000
+    const warnings = computeUpcomingEMIFundingWarnings(loans, accountBalances, minBalances, today);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].requiredAmount).toBe(31000);
+    expect(warnings[0].shortfall).toBe(16000);
+    expect(warnings[0].suggestedSourceAccount).toBe('ICICI');
+    expect(warnings[0].suggestedSourceAvailable).toBe(70000);
+  });
+
+  it('does not suggest itself as a transfer source, and returns null if no other account has a surplus', () => {
+    const loans = [
+      { status: 'Active', debitsFrom: 'HDFC', name: 'Land Loan', emiStatus: { nextDueDate: '2026-09-20', emi: 21000 } },
+    ];
+    const accountBalances = new Map([['HDFC', 15000], ['ICICI', 500]]); // ICICI has almost nothing either
+    const warnings = computeUpcomingEMIFundingWarnings(loans, accountBalances, new Map(), today);
+    expect(warnings[0].suggestedSourceAccount).toBe('ICICI'); // still the best available, even if small
+    expect(warnings[0].suggestedSourceAvailable).toBe(500);
+
+    const noSurplusBalances = new Map([['HDFC', 15000], ['ICICI', 0]]);
+    const warnings2 = computeUpcomingEMIFundingWarnings(loans, noSurplusBalances, new Map(), today);
+    expect(warnings2[0].suggestedSourceAccount).toBeNull();
+  });
+
   it('ignores closed loans, loans with no DebitsFrom, and dates already due or in a different month', () => {
     const loans = [
       { status: 'Closed', debitsFrom: 'HDFC', name: 'Closed Loan', emiStatus: { nextDueDate: '2026-09-20', emi: 99999 } },

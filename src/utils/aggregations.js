@@ -87,19 +87,25 @@ export function hasEMIBeenLoggedForMonth(cashBookRows, loan, month) {
 }
 
 /**
- * For EMI loans with an installment due *later this month* (not yet due,
- * so not yet auto-logged), checks whether the paying account's current
- * balance - minus its configured minimum balance buffer - can actually
- * cover the total upcoming EMI(s) for that account. Surfaces a shortfall
- * warning from the start of the month (as soon as the balance is
+ * For EMI loans with an installment due *later this month* (not yet due, so
+ * not yet shown as a "Due Now" confirm card), checks whether the paying
+ * account's current balance - minus its configured minimum balance buffer -
+ * can actually cover the total upcoming EMI(s) for that account. Surfaces a
+ * shortfall warning from the start of the month (as soon as the balance is
  * insufficient), not just on the due date itself, so there's time to
  * transfer funds in. Multiple loans debiting the same account are summed
  * together.
+ *
+ * Also suggests which *other* account to transfer the shortfall from - the
+ * one with the largest available surplus (its own balance minus its own
+ * minimum balance buffer), if any account has a positive surplus. This is
+ * only a suggestion (the largest-surplus account, not necessarily one that
+ * fully covers the shortfall) - the user decides how much to actually move.
  * @param {Array} loans - parsed EMI loan objects (each with .status, .debitsFrom, .emiStatus.{nextDueDate,emi})
  * @param {Map<string, number>} accountBalances - from useCashBook
  * @param {Map<string, number>} minBalances - from useAccountSettings
  * @param {string} today - "YYYY-MM-DD"
- * @returns {{ account: string, requiredAmount: number, currentBalance: number, shortfall: number, loanNames: string[] }[]}
+ * @returns {{ account: string, requiredAmount: number, currentBalance: number, shortfall: number, loanNames: string[], suggestedSourceAccount: string|null, suggestedSourceAvailable: number }[]}
  */
 export function computeUpcomingEMIFundingWarnings(loans, accountBalances, minBalances, today) {
   const currentMonth = today.slice(0, 7);
@@ -109,7 +115,7 @@ export function computeUpcomingEMIFundingWarnings(loans, accountBalances, minBal
     if (loan.status === 'Closed' || !loan.debitsFrom) continue;
     const due = loan.emiStatus?.nextDueDate;
     // Only "upcoming, not yet due" installments this month - once the due
-    // date arrives, the auto-logger takes over instead of this warning.
+    // date arrives, the Dashboard's "Due Now" card takes over instead.
     if (!due || !due.startsWith(currentMonth) || due <= today) continue;
 
     const entry = byAccount.get(loan.debitsFrom) || { requiredAmount: 0, loanNames: [] };
@@ -124,7 +130,20 @@ export function computeUpcomingEMIFundingWarnings(loans, accountBalances, minBal
     const minBalance = minBalances.get(account) || 0;
     const available = currentBalance - minBalance;
     if (available < requiredAmount) {
-      warnings.push({ account, requiredAmount, currentBalance, shortfall: requiredAmount - available, loanNames });
+      let suggestedSourceAccount = null;
+      let suggestedSourceAvailable = 0;
+      for (const [otherAccount, otherBalance] of accountBalances) {
+        if (otherAccount === account) continue;
+        const otherSurplus = otherBalance - (minBalances.get(otherAccount) || 0);
+        if (otherSurplus > suggestedSourceAvailable) {
+          suggestedSourceAccount = otherAccount;
+          suggestedSourceAvailable = otherSurplus;
+        }
+      }
+      warnings.push({
+        account, requiredAmount, currentBalance, shortfall: requiredAmount - available, loanNames,
+        suggestedSourceAccount, suggestedSourceAvailable,
+      });
     }
   }
   return warnings;

@@ -148,14 +148,34 @@ export default function DashboardPage() {
       {fundingWarnings.map((w) => (
         <div key={w.account} className="bg-red-50 rounded-2xl p-4 flex items-start gap-2">
           <AlertTriangle size={18} className="text-danger shrink-0 mt-0.5" />
-          <div>
+          <div className="flex-1 min-w-0">
             <p className="text-sm text-danger font-semibold">
               {w.account} may be short by {formatCurrency(w.shortfall)}
             </p>
             <p className="text-xs text-gray-600 mt-0.5">
               {w.loanNames.join(', ')} need{w.loanNames.length === 1 ? 's' : ''} {formatCurrency(w.requiredAmount)} this
-              month, but {w.account}'s current balance is {formatCurrency(w.currentBalance)}. Transfer funds in before the due date.
+              month, but {w.account}'s current balance is {formatCurrency(w.currentBalance)}.
             </p>
+            {w.suggestedSourceAccount ? (
+              <button
+                onClick={() => navigate('/cashbook', {
+                  state: {
+                    openTransfer: true,
+                    transferPrefill: {
+                      fromAccount: w.suggestedSourceAccount, toAccount: w.account,
+                      amount: Math.min(w.shortfall, w.suggestedSourceAvailable),
+                      description: `${w.loanNames.join(', ')} EMI funding`,
+                    },
+                  },
+                })}
+                className="mt-2 flex items-center gap-1.5 bg-white text-danger text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm"
+              >
+                <ArrowLeftRight size={13} />
+                Transfer {formatCurrency(Math.min(w.shortfall, w.suggestedSourceAvailable))} from {w.suggestedSourceAccount}
+              </button>
+            ) : (
+              <p className="text-xs text-gray-500 mt-1">No other account currently has a surplus to suggest transferring from.</p>
+            )}
           </div>
         </div>
       ))}

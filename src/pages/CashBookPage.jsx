@@ -19,19 +19,24 @@ export default function CashBookPage() {
   const { minBalances, setMinBalance } = accountSettings;
   const [showForm, setShowForm] = useState(false);
   const [showTransferForm, setShowTransferForm] = useState(false);
+  const [transferPrefill, setTransferPrefill] = useState(null);
   const [editingRow, setEditingRow] = useState(null); // { index, data }
   const [reconcileAccount, setReconcileAccount] = useState(null);
   const [toast, setToast] = useState(null);
 
-  // Dashboard's Quick Actions navigate here with state telling us to open a
-  // form immediately, instead of landing on the page and requiring a second
-  // tap. Consumed once and cleared from history state so it doesn't
-  // re-trigger on a later back/forward navigation or refresh.
+  // Dashboard's Quick Actions (and the funding-warning "Transfer Now"
+  // shortcut) navigate here with state telling us to open a form
+  // immediately, instead of landing on the page and requiring a second tap.
+  // Consumed once and cleared from history state so it doesn't re-trigger
+  // on a later back/forward navigation or refresh.
   const location = useLocation();
   const navigate = useNavigate();
   useEffect(() => {
     if (location.state?.openForm) setShowForm(true);
-    if (location.state?.openTransfer) setShowTransferForm(true);
+    if (location.state?.openTransfer) {
+      setShowTransferForm(true);
+      if (location.state?.transferPrefill) setTransferPrefill(location.state.transferPrefill);
+    }
     if (location.state?.openForm || location.state?.openTransfer) {
       navigate(location.pathname, { replace: true, state: null });
     }
@@ -42,6 +47,7 @@ export default function CashBookPage() {
     try {
       await addTransfer(transfer);
       setShowTransferForm(false);
+      setTransferPrefill(null);
       setToast({ message: 'Transfer recorded!', type: 'success' });
     } catch {
       setToast({ message: 'Failed to save transfer. Check internet.', type: 'error' });
@@ -210,8 +216,9 @@ export default function CashBookPage() {
         <TransferForm
           accountOptions={lists.accounts}
           onAddAccount={(v) => addListItem('accounts', v)}
+          initial={transferPrefill}
           onSave={handleSaveTransfer}
-          onClose={() => setShowTransferForm(false)}
+          onClose={() => { setShowTransferForm(false); setTransferPrefill(null); }}
         />
       )}
 
