@@ -359,8 +359,20 @@ export default function MonthlyPage() {
 
   // Planned vs Actual bar chart - one row per category actually planned
   // this month, so it's directly comparable to the Categories list below.
+  // `actualForPlan` returns a signed net (Money IN - Money OUT), which is
+  // naturally *negative* for an outflow category (e.g. -72,040 for a
+  // 72,040 EMI payment) - but Planned Amount is always entered as a plain
+  // positive budgeted figure regardless of direction. Comparing the two
+  // directly (positive Planned vs negative Actual) broke both the bar
+  // width math and showed a confusing negative number, so both sides are
+  // compared as magnitudes here instead - this chart is about "how much
+  // activity happened vs how much was planned," not the sign/direction.
   const barChartData = monthPlans
-    .map((p) => ({ label: accountLabel(p) ? `${p.category} (${accountLabel(p)})` : p.category, planned: p.plannedAmount, actual: actualForPlan(p) }))
+    .map((p) => ({
+      label: accountLabel(p) ? `${p.category} (${accountLabel(p)})` : p.category,
+      planned: Math.abs(p.plannedAmount),
+      actual: Math.abs(actualForPlan(p)),
+    }))
     .sort((a, b) => b.planned - a.planned);
 
   const handleSave = async (entry) => {
