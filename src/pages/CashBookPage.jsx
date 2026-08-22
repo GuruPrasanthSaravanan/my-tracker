@@ -71,6 +71,18 @@ export default function CashBookPage() {
     }
   };
 
+  // Same as handleSave but deliberately doesn't close the form - see
+  // EntryForm.jsx's "Save & Add Another" for why (logging several
+  // transactions in a row shouldn't mean reopening the form each time).
+  const handleSaveAndAddAnother = async (entry) => {
+    try {
+      await addEntry(entry);
+      setToast({ message: 'Entry saved! Add the next one below.', type: 'success' });
+    } catch {
+      setToast({ message: 'Failed to save. Check internet.', type: 'error' });
+    }
+  };
+
   const handleEdit = async (entry) => {
     try {
       await editEntry(editingRow.index, entry);
@@ -277,6 +289,7 @@ export default function CashBookPage() {
           type="cashbook"
           lists={lists}
           onSave={handleSave}
+          onSaveAndAddAnother={handleSaveAndAddAnother}
           onClose={() => setShowForm(false)}
           onAddListItem={addListItem}
           cashBookRows={rows}

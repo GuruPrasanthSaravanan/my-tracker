@@ -167,6 +167,65 @@ function RenameListValueForm({ listLabel, oldValue, existingValues, onSave, onCl
   );
 }
 
+/**
+ * Same shape as RenameListValueForm, but scoped to a single Type - a
+ * sub-category rename only ever needs to check for collisions and cascade
+ * within its own Type (see useSubCategories.jsx's renameSubCategory).
+ */
+function RenameSubCategoryForm({ type, oldValue, existingValues, onSave, onClose }) {
+  const [newValue, setNewValue] = useState(oldValue);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const collision = existingValues.some((v) => v !== oldValue && v.toLowerCase() === newValue.trim().toLowerCase());
+
+  const handleSubmit = async () => {
+    if (isSaving) return;
+    if (!newValue.trim()) return setError('Please enter a value.');
+    setError('');
+    setIsSaving(true);
+    try {
+      await onSave(newValue.trim());
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-end">
+      <div className="bg-white w-full rounded-t-2xl p-4 pb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-bold">Rename Sub-Category</h2>
+          <button onClick={onClose} disabled={isSaving} className="p-1"><X size={20} /></button>
+        </div>
+        <div className="space-y-3">
+          {error && <div className="bg-red-50 text-danger text-sm px-3 py-2 rounded-lg">{error}</div>}
+          <div>
+            <label className="text-xs text-gray-500">New Name (under {type})</label>
+            <input type="text" value={newValue} onChange={(e) => setNewValue(e.target.value)}
+              disabled={isSaving} autoFocus
+              className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
+          </div>
+          {collision && (
+            <p className="text-xs text-amber-600 flex items-start gap-1">
+              <AlertTriangle size={12} className="shrink-0 mt-0.5" />
+              "{newValue.trim()}" already exists under {type} - saving will merge every "{oldValue}" entry into it.
+            </p>
+          )}
+          <p className="text-xs text-gray-400">
+            Updates every past CashBook entry tagged with "{oldValue}" under {type}, so the Monthly page's
+            sub-category breakdown stays correct after the rename.
+          </p>
+          <button onClick={handleSubmit} disabled={isSaving}
+            className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-lg mt-2 disabled:opacity-60">
+            {isSaving ? 'Renaming...' : 'Rename'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const {
     lists, cashBook, vendors, projects, emiLoans, handLoans, creditCards, chitFunds,
@@ -185,8 +244,18 @@ export default function SettingsPage() {
   const [confirmDeleteOrphan, setConfirmDeleteOrphan] = useState(null);
   const [isDeletingOrphan, setIsDeletingOrphan] = useState(false);
   const [isProvisioning, setIsProvisioning] = useState(false);
+  const [activeSubCategoryType, setActiveSubCategoryType] = useState('');
+  const [newSubCategoryName, setNewSubCategoryName] = useState('');
+  const [isAddingSubCategory, setIsAddingSubCategory] = useState(false);
+  const [removingSubCategory, setRemovingSubCategory] = useState(null);
+  const [renamingSubCategory, setRenamingSubCategory] = useState(null);
   const [toast, setToast] = useState(null);
   const notify = (message, type = 'success') => setToast({ message, type });
+
+  // Defaults to the first Type once the list loads, rather than staying
+  // blank forever - mirrors activeListTab's fixed default above, just
+  // computed since Types (unlike the fixed LIST_TABS) are user-defined.
+  const subCategoryType = activeSubCategoryType || lists.lists.types?.[0] || '';
 
   const handleRemove = async (value) => {
     setRemoving(value);
@@ -217,6 +286,50 @@ export default function SettingsPage() {
         accountSettings.refresh(), accountTypeFavorites.refresh(), subCategories.refresh(),
       ]);
       setRenamingValue(null);
+      notify(`Renamed to "${newValue}"${result.cellsUpdated > 0 ? ` - updated ${result.cellsUpdated} other entr${result.cellsUpdated === 1 ? 'y' : 'ies'}.` : '.'}`);
+    } catch {
+      notify('Failed to rename. Please try again.', 'error');
+    }
+  };
+
+  const handleAddSubCategory = async () => {
+    if (isAddingSubCategory || !newSubCategoryName.trim() || !subCategoryType) return;
+    setIsAddingSubCategory(true);
+    try {
+      await subCategories.addSubCategory(subCategoryType, newSubCategoryName.trim());
+      setNewSubCategoryName('');
+      notify('Sub-category added!');
+    } catch {
+      notify('Failed to add sub-category.', 'error');
+    } finally {
+      setIsAddingSubCategory(false);
+    }
+  };
+
+  const handleRemoveSubCategory = async (value) => {
+    setRemovingSubCategory(value);
+    try {
+      await subCategories.deleteSubCategory(subCategoryType, value);
+      notify(`Removed "${value}"`);
+    } catch {
+      notify('Failed to remove.', 'error');
+    } finally {
+      setRemovingSubCategory(null);
+    }
+  };
+
+  // Cascades into every past CashBook entry tagged with this sub-category
+  // under this same Type (see useSubCategories.jsx renameSubCategory) - so
+  // CashBook needs a refresh too, not just the sub-category list itself.
+  const handleRenameSubCategory = async (newValue) => {
+    try {
+      const result = await subCategories.renameSubCategory(subCategoryType, renamingSubCategory, newValue);
+      if (!result.renamed) {
+        notify('Could not find that sub-category to rename.', 'error');
+        return;
+      }
+      await cashBook.refresh();
+      setRenamingSubCategory(null);
       notify(`Renamed to "${newValue}"${result.cellsUpdated > 0 ? ` - updated ${result.cellsUpdated} other entr${result.cellsUpdated === 1 ? 'y' : 'ies'}.` : '.'}`);
     } catch {
       notify('Failed to rename. Please try again.', 'error');
@@ -384,6 +497,79 @@ export default function SettingsPage() {
           existingValues={lists.lists[activeListTab] || []}
           onSave={handleRename}
           onClose={() => setRenamingValue(null)}
+        />
+      )}
+
+      {/* Manage Sub-Categories - a second-level list scoped per-Type (e.g.
+          Type=WANTS -> Dining/Shopping/Entertainment), so unlike Manage
+          Lists above this needs a Type picker first, then the sub-category
+          chips/add-input underneath it are all scoped to that Type. */}
+      <div>
+        <h2 className="text-sm font-semibold text-gray-500 mb-2">Manage Sub-Categories</h2>
+        {(lists.lists.types || []).length === 0 ? (
+          <p className="text-sm text-gray-400 bg-white rounded-xl shadow-sm p-3">
+            Add a Type under Manage Lists above first - sub-categories are scoped to a Type.
+          </p>
+        ) : (
+          <>
+            <div className="flex gap-1 overflow-x-auto pb-2 mb-2">
+              {lists.lists.types.map((t) => (
+                <button key={t} onClick={() => setActiveSubCategoryType(t)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap ${
+                    subCategoryType === t ? 'bg-primary text-white' : 'bg-gray-100 text-gray-600'
+                  }`}>
+                  {t}
+                </button>
+              ))}
+            </div>
+            <div className="bg-white rounded-xl shadow-sm p-3 mb-2">
+              {subCategories.isLoading ? (
+                <p className="text-sm text-gray-400 text-center py-2">Loading...</p>
+              ) : subCategories.subCategoriesForType(subCategoryType).length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-2">No sub-categories under {subCategoryType} yet.</p>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {subCategories.subCategoriesForType(subCategoryType).map((value) => (
+                    <span key={value} className="flex items-center gap-1 bg-gray-100 text-gray-700 text-xs px-2.5 py-1.5 rounded-full">
+                      {value}
+                      <button onClick={() => setRenamingSubCategory(value)}
+                        className="text-gray-400 hover:text-primary">
+                        <Pencil size={12} />
+                      </button>
+                      <button onClick={() => handleRemoveSubCategory(value)} disabled={removingSubCategory === value}
+                        className="text-gray-400 hover:text-danger disabled:opacity-50">
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input type="text" value={newSubCategoryName} onChange={(e) => setNewSubCategoryName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddSubCategory()}
+                placeholder={`New sub-category under ${subCategoryType}`} disabled={isAddingSubCategory}
+                className="flex-1 border rounded-lg px-3 py-2 text-sm disabled:opacity-50" />
+              <button onClick={handleAddSubCategory} disabled={isAddingSubCategory || !newSubCategoryName.trim()}
+                className="bg-primary text-white px-4 rounded-lg text-sm font-medium disabled:opacity-50">
+                {isAddingSubCategory ? 'Adding...' : 'Add'}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">
+              Removing a sub-category here only removes it from the dropdown - past entries that used it are
+              unaffected. Renaming updates every past CashBook entry tagged with it under this Type.
+            </p>
+          </>
+        )}
+      </div>
+
+      {renamingSubCategory && (
+        <RenameSubCategoryForm
+          type={subCategoryType}
+          oldValue={renamingSubCategory}
+          existingValues={subCategories.subCategoriesForType(subCategoryType)}
+          onSave={handleRenameSubCategory}
+          onClose={() => setRenamingSubCategory(null)}
         />
       )}
 

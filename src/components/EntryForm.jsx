@@ -40,6 +40,7 @@ function makeUniqueProjectCode(name, existingCodes = []) {
 export default function EntryForm({
   type, lists, onSave, onClose, initialData, onDelete, isEditing, onAddListItem, existingProjectCodes,
   cashBookRows = [], favoritesForAccount, onToggleFavorite, subCategoriesForType, onAddSubCategory,
+  onSaveAndAddAnother,
 }) {
   const [form, setForm] = useState(initialData || {
     date: getTodayISO(),
@@ -106,18 +107,9 @@ export default function EntryForm({
     return '';
   };
 
-  const handleSubmit = async () => {
-    if (isSaving || isDeleting) return;
-    const validationError = validate();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-    setError('');
-
-    let payload;
+  const buildPayload = () => {
     if (type === 'cashbook') {
-      payload = {
+      return {
         date: form.date,
         description: form.description,
         account: form.account,
@@ -130,7 +122,7 @@ export default function EntryForm({
         subCategory: form.subCategory || '',
       };
     } else if (type === 'vendors') {
-      payload = {
+      return {
         date: form.date,
         vendor: form.vendor,
         description: form.description,
@@ -141,7 +133,7 @@ export default function EntryForm({
         cashBookAccount: showCashBookLink && logToCashBook ? cashBookAccount : null,
       };
     } else if (type === 'project') {
-      payload = {
+      return {
         code: isEditing && initialData?.code
           ? initialData.code
           : makeUniqueProjectCode(form.description, existingProjectCodes || []),
@@ -155,7 +147,7 @@ export default function EntryForm({
         notes: '',
       };
     } else if (type === 'milestone') {
-      payload = {
+      return {
         milestone: form.description,
         plannedDate: form.date,
         actualDate: '',
@@ -163,16 +155,52 @@ export default function EntryForm({
         notes: '',
       };
     } else if (type === 'debt-payment') {
-      payload = {
+      return {
         description: form.description,
         date: form.date,
         amount: form.amount,
       };
     }
+    return undefined;
+  };
+
+  const handleSubmit = async () => {
+    if (isSaving || isDeleting) return;
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError('');
 
     setIsSaving(true);
     try {
-      await onSave(payload);
+      await onSave(buildPayload());
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // CashBook-only: rather than closing the form after every entry, keeps it
+  // open with everything except Amount/Description carried over (Date,
+  // Account, Type, Project, Sub-category) - logging several transactions
+  // in a row (e.g. a batch of the day's receipts) otherwise means
+  // reopening and re-picking Account/Type from scratch every single time.
+  const showAddAnother = type === 'cashbook' && !isEditing && !!onSaveAndAddAnother;
+
+  const handleSubmitAndAddAnother = async () => {
+    if (isSaving || isDeleting) return;
+    const validationError = validate();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError('');
+
+    setIsSaving(true);
+    try {
+      await onSaveAndAddAnother(buildPayload());
+      setForm((prev) => ({ ...prev, description: '', amount: '' }));
     } finally {
       setIsSaving(false);
     }
@@ -318,6 +346,13 @@ export default function EntryForm({
             className="w-full bg-primary text-white py-3 rounded-xl font-semibold text-lg active:scale-98 transition mt-2 disabled:opacity-60">
             {isSaving ? 'Saving...' : (isEditing ? 'Update' : 'Save')}
           </button>
+
+          {showAddAnother && (
+            <button onClick={handleSubmitAndAddAnother} disabled={busy}
+              className="w-full bg-gray-100 text-gray-700 py-2.5 rounded-xl font-medium text-sm active:scale-98 transition disabled:opacity-60">
+              {isSaving ? 'Saving...' : 'Save & Add Another'}
+            </button>
+          )}
 
           {isEditing && onDelete && (
             confirmDelete ? (
