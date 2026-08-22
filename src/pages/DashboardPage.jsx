@@ -101,32 +101,8 @@ export default function DashboardPage() {
     <div className="space-y-4">
       <h1 className="text-lg font-bold text-gray-900">Dashboard</h1>
 
-      {/* Key metrics */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-primary text-white rounded-2xl p-4">
-          <p className="text-xs opacity-80">Total Balance</p>
-          <p className="text-xl font-bold">{formatCurrency(cashBook.totalBalance)}</p>
-        </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <p className="text-xs text-gray-500">Vendor Owed</p>
-          <p className="text-xl font-bold text-danger">{formatCurrency(vendors.totalOwed)}</p>
-        </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <p className="text-xs text-gray-500">Total Debt Outstanding</p>
-          <p className="text-xl font-bold text-danger">{formatCurrency(totalDebtOutstanding)}</p>
-        </div>
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <p className="text-xs text-gray-500">This Month's Surplus</p>
-          <p className={`text-xl font-bold ${surplus >= 0 ? 'text-success' : 'text-danger'}`}>
-            {formatCurrency(surplus)}
-          </p>
-        </div>
-      </div>
-
-      <div className="bg-white rounded-2xl p-4 shadow-sm text-sm text-gray-500 flex items-center justify-between">
-        <span>Income this month: <span className="text-gray-900 font-medium">{formatCurrency(totalIn)}</span></span>
-        <span>Outflow: <span className="text-gray-900 font-medium">{formatCurrency(totalOut)}</span></span>
-      </div>
+      {/* Actionable items first - anything needing your attention should be
+          seen before routine stats, not buried below them. */}
 
       {/* EMIs due now, awaiting a one-tap confirm to log into CashBook */}
       {dueEMIs.map((loan) => (
@@ -188,6 +164,34 @@ export default function DashboardPage() {
           <p className="text-xs text-gray-500 mt-0.5">{formatDate(nextDue.date)}</p>
         </button>
       )}
+
+      {/* Key metrics */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="bg-primary text-white rounded-2xl p-4">
+          <p className="text-xs opacity-80">Total Balance</p>
+          <p className="text-xl font-bold">{formatCurrency(cashBook.totalBalance)}</p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <p className="text-xs text-gray-500">Vendor Owed</p>
+          <p className="text-xl font-bold text-danger">{formatCurrency(vendors.totalOwed)}</p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <p className="text-xs text-gray-500">Total Debt Outstanding</p>
+          <p className="text-xl font-bold text-danger">{formatCurrency(totalDebtOutstanding)}</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">EMI + Hand Loans + Credit Cards - excludes Chit Funds</p>
+        </div>
+        <div className="bg-white rounded-2xl p-4 shadow-sm">
+          <p className="text-xs text-gray-500">This Month's Surplus</p>
+          <p className={`text-xl font-bold ${surplus >= 0 ? 'text-success' : 'text-danger'}`}>
+            {formatCurrency(surplus)}
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl p-4 shadow-sm text-sm text-gray-500 flex items-center justify-between">
+        <span>Income this month: <span className="text-gray-900 font-medium">{formatCurrency(totalIn)}</span></span>
+        <span>Outflow: <span className="text-gray-900 font-medium">{formatCurrency(totalOut)}</span></span>
+      </div>
 
       {/* Quick actions */}
       <div>

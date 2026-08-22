@@ -10,7 +10,7 @@ import EntryForm from '../components/EntryForm';
 import ReconcileModal from '../components/ReconcileModal';
 import TransferForm from '../components/TransferForm';
 import { formatCurrency, getTodayISO } from '../utils/formatters';
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowLeftRight, Plus } from 'lucide-react';
 
 export default function CashBookPage() {
   const { cashBook, lists: listsData, accountSettings, accountTypeFavorites, subCategories } = useAppData();
@@ -182,14 +182,10 @@ export default function CashBookPage() {
         )}
       </div>
 
-      <button
-        onClick={() => setShowTransferForm(true)}
-        className="fixed bottom-40 right-4 w-14 h-14 bg-primary text-white rounded-full shadow-lg flex items-center justify-center active:scale-95 transition z-10"
-        aria-label="Transfer between accounts"
-      >
-        <ArrowLeftRight size={24} />
-      </button>
-      <FAB onClick={() => setShowForm(true)} />
+      <FAB actions={[
+        { label: 'Add Entry', icon: Plus, onClick: () => setShowForm(true) },
+        { label: 'Transfer', icon: ArrowLeftRight, onClick: () => setShowTransferForm(true) },
+      ]} />
 
       {showForm && (
         <EntryForm

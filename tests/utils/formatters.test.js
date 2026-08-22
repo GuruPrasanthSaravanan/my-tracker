@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { formatCurrency, formatDate, toLocalISODate, getTodayISO, addDaysISO } from '../../src/utils/formatters';
 
 describe('formatCurrency', () => {
-  it('formats Indian number style', () => {
-    expect(formatCurrency(153000)).toBe('1,53,000');
-    expect(formatCurrency(0)).toBe('0');
-    expect(formatCurrency(-30000)).toBe('-30,000');
+  it('formats Indian number style with a ₹ prefix', () => {
+    expect(formatCurrency(153000)).toBe('₹1,53,000');
+    expect(formatCurrency(0)).toBe('₹0');
+    expect(formatCurrency(-30000)).toBe('-₹30,000');
   });
 });
 

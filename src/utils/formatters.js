@@ -1,13 +1,13 @@
 /**
- * Format number in Indian currency style (no rupee symbol).
- * 153000 -> "1,53,000"
+ * Format number in Indian currency style, with a ₹ prefix.
+ * 153000 -> "₹1,53,000"
  */
 export function formatCurrency(num) {
-  if (num === 0) return '0';
+  if (num === 0) return '₹0';
   const isNegative = num < 0;
   const abs = Math.abs(num);
   const formatted = abs.toLocaleString('en-IN', { maximumFractionDigits: 0 });
-  return isNegative ? `-${formatted}` : formatted;
+  return isNegative ? `-₹${formatted}` : `₹${formatted}`;
 }
 
 /**
