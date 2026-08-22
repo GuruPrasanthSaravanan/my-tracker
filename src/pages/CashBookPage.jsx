@@ -22,6 +22,7 @@ export default function CashBookPage() {
   const [transferPrefill, setTransferPrefill] = useState(null);
   const [editingRow, setEditingRow] = useState(null); // { index, data }
   const [reconcileAccount, setReconcileAccount] = useState(null);
+  const [showAllAccounts, setShowAllAccounts] = useState(false);
   const [toast, setToast] = useState(null);
 
   // Dashboard's Quick Actions (and the funding-warning "Transfer Now"
@@ -128,9 +129,18 @@ export default function CashBookPage() {
     }
   };
 
+  const nonZeroAccounts = Array.from(accountBalances.entries())
+    .filter(([, val]) => val !== 0)
+    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  const ACCOUNT_PREVIEW_COUNT = 6;
+  const previewAccounts = nonZeroAccounts.slice(0, ACCOUNT_PREVIEW_COUNT);
+  const hasMoreAccounts = nonZeroAccounts.length > ACCOUNT_PREVIEW_COUNT;
+
   return (
     <div>
-      {/* Summary Section */}
+      {/* Summary Section - kept compact (top N accounts) since it's sticky;
+          "Show all" expands into a separate, normally-scrolling section
+          below instead of growing the sticky box itself. */}
       <div className="sticky top-0 bg-gray-50 z-10 pb-3">
         <div className="bg-primary text-white rounded-2xl p-4 mb-3">
           <p className="text-xs opacity-80">Total Balance</p>
@@ -138,22 +148,41 @@ export default function CashBookPage() {
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          {Array.from(accountBalances.entries())
-            .filter(([, val]) => val !== 0)
-            .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
-            .slice(0, 6)
-            .map(([account, balance]) => (
-              <SummaryCard
-                key={account}
-                label={account}
-                amount={balance}
-                color={balance > 0 ? 'green' : balance < 0 ? 'red' : 'gray'}
-                minBalance={minBalances.get(account)}
-                onClick={() => setReconcileAccount(account)}
-              />
-            ))}
+          {previewAccounts.map(([account, balance]) => (
+            <SummaryCard
+              key={account}
+              label={account}
+              amount={balance}
+              color={balance > 0 ? 'green' : balance < 0 ? 'red' : 'gray'}
+              minBalance={minBalances.get(account)}
+              onClick={() => setReconcileAccount(account)}
+            />
+          ))}
         </div>
+
+        {hasMoreAccounts && (
+          <button onClick={() => setShowAllAccounts((v) => !v)}
+            className="w-full text-center text-xs text-primary font-medium mt-2">
+            {showAllAccounts ? 'Hide extra accounts' : `Show all ${nonZeroAccounts.length} accounts`}
+          </button>
+        )}
       </div>
+
+      {/* All accounts (expanded) - non-sticky, so it doesn't grow the sticky header above. */}
+      {showAllAccounts && (
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          {nonZeroAccounts.map(([account, balance]) => (
+            <SummaryCard
+              key={account}
+              label={account}
+              amount={balance}
+              color={balance > 0 ? 'green' : balance < 0 ? 'red' : 'gray'}
+              minBalance={minBalances.get(account)}
+              onClick={() => setReconcileAccount(account)}
+            />
+          ))}
+        </div>
+      )}
 
       {/* Transaction List */}
       <div className="mt-4">
