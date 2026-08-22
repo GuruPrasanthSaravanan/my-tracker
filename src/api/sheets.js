@@ -137,6 +137,33 @@ export async function updateRow(token, range, values) {
 }
 
 /**
+ * Writes multiple row ranges in a single request via the Sheets API's
+ * `values:batchUpdate` endpoint. Used whenever two or more rows must land
+ * together as a single logical action (e.g. a self-transfer between two
+ * CashBook accounts, which needs a matching Money Out row and Money In row) -
+ * a single HTTP call either succeeds or fails as a whole, which is far safer
+ * than issuing separate sequential `updateRow` calls that could leave one
+ * leg written and the other missing if the second call fails.
+ * @param {string} token - OAuth access token
+ * @param {{ range: string, values: string[] }[]} updates - one entry per row to write
+ */
+export async function batchUpdateRows(token, updates) {
+  const url = `${BASE_URL}/${SPREADSHEET_ID}/values:batchUpdate`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      valueInputOption: 'USER_ENTERED',
+      data: updates.map(({ range, values }) => ({ range, values: [protectIsoDates(values)] })),
+    }),
+  });
+  await handleResponse(res);
+}
+
+/**
  * Clear a specific row (effectively deleting it visually).
  * @param {string} token - OAuth access token
  * @param {string} range - e.g., "CashBook!A5:F5"

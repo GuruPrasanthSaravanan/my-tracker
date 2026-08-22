@@ -7,17 +7,30 @@ import Toast from '../components/Toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import EntryForm from '../components/EntryForm';
 import ReconcileModal from '../components/ReconcileModal';
+import TransferForm from '../components/TransferForm';
 import { formatCurrency, getTodayISO } from '../utils/formatters';
+import { ArrowLeftRight } from 'lucide-react';
 
 export default function CashBookPage() {
   const { cashBook, lists: listsData, accountSettings } = useAppData();
-  const { rows, isLoading, addEntry, editEntry, deleteEntry, totalBalance, accountBalances } = cashBook;
+  const { rows, isLoading, addEntry, editEntry, deleteEntry, addTransfer, totalBalance, accountBalances } = cashBook;
   const { lists, addListItem } = listsData;
   const { minBalances, setMinBalance } = accountSettings;
   const [showForm, setShowForm] = useState(false);
+  const [showTransferForm, setShowTransferForm] = useState(false);
   const [editingRow, setEditingRow] = useState(null); // { index, data }
   const [reconcileAccount, setReconcileAccount] = useState(null);
   const [toast, setToast] = useState(null);
+
+  const handleSaveTransfer = async (transfer) => {
+    try {
+      await addTransfer(transfer);
+      setShowTransferForm(false);
+      setToast({ message: 'Transfer recorded!', type: 'success' });
+    } catch {
+      setToast({ message: 'Failed to save transfer. Check internet.', type: 'error' });
+    }
+  };
 
   const handleSave = async (entry) => {
     try {
@@ -145,6 +158,13 @@ export default function CashBookPage() {
         )}
       </div>
 
+      <button
+        onClick={() => setShowTransferForm(true)}
+        className="fixed bottom-40 right-4 w-11 h-11 bg-white text-primary border border-primary/30 rounded-full shadow-lg flex items-center justify-center active:scale-95 transition z-10"
+        aria-label="Transfer between accounts"
+      >
+        <ArrowLeftRight size={18} />
+      </button>
       <FAB onClick={() => setShowForm(true)} />
 
       {showForm && (
@@ -167,6 +187,15 @@ export default function CashBookPage() {
           onSave={handleEdit}
           onDelete={handleDelete}
           onClose={() => setEditingRow(null)}
+        />
+      )}
+
+      {showTransferForm && (
+        <TransferForm
+          accountOptions={lists.accounts}
+          onAddAccount={(v) => addListItem('accounts', v)}
+          onSave={handleSaveTransfer}
+          onClose={() => setShowTransferForm(false)}
         />
       )}
 
