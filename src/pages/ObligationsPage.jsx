@@ -531,6 +531,7 @@ export default function ObligationsPage() {
             notes: selectedEMILoan.notes,
             emiDate: selectedEMILoan.emiDate ? String(selectedEMILoan.emiDate) : '',
             actualEMI: selectedEMILoan.actualEMI ? String(selectedEMILoan.actualEMI) : '',
+            payoffPriority: selectedEMILoan.payoffPriority != null ? String(selectedEMILoan.payoffPriority) : '',
           }}
           onSave={handleSaveEMI}
           onDelete={handleDeleteEMI}
@@ -580,6 +581,7 @@ export default function ObligationsPage() {
             debitsFrom: selectedHandLoan.debitsFrom,
             status: selectedHandLoan.status,
             notes: selectedHandLoan.notes,
+            payoffPriority: selectedHandLoan.payoffPriority != null ? String(selectedHandLoan.payoffPriority) : '',
           }}
           onSave={handleSaveHandLoan}
           onDelete={handleDeleteHandLoan}
