@@ -17,6 +17,15 @@ import { ChevronLeft, ChevronRight, Plus, X, Trash2, Settings2, ArrowLeft, Downl
 
 const SECTIONS = ['Income', 'My Outflows', 'Wife Outflows', 'Projects'];
 
+// "Transfers" is not a manually-selectable Section (it wouldn't make sense
+// to ask "which section is this transfer in" - a self-transfer isn't
+// income/outflow/a project) - instead any plan with Category=TRANSFER is
+// automatically grouped under it for display, regardless of whatever
+// Section value happens to be stored on that row (existing Transfer plans
+// don't need to be edited/migrated for this to take effect).
+const DISPLAY_SECTIONS = ['Income', 'My Outflows', 'Wife Outflows', 'Transfers', 'Projects'];
+const effectiveSection = (p) => (p.category === 'TRANSFER' ? 'Transfers' : p.section);
+
 /** "ICICI -> AXIS" for a Transfer plan with both sides set, else just the (From) account, else nothing. */
 function accountLabel(item) {
   if (item.account && item.toAccount) return `${item.account} \u2192 ${item.toAccount}`;
@@ -82,13 +91,17 @@ function PlanForm({
               onChange={(e) => set('plannedAmount', e.target.value)} disabled={busy}
               placeholder="0" className="w-full border rounded-lg px-3 py-3 mt-0.5 text-xl font-bold text-center disabled:opacity-50" />
           </div>
-          <div>
-            <label className="text-xs text-gray-500">Section</label>
-            <select value={form.section} onChange={(e) => set('section', e.target.value)} disabled={busy}
-              className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50">
-              {SECTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-          </div>
+          {isTransfer ? (
+            <p className="text-xs text-gray-400">Transfers are grouped automatically under their own "Transfers" section - no need to pick one.</p>
+          ) : (
+            <div>
+              <label className="text-xs text-gray-500">Section</label>
+              <select value={form.section} onChange={(e) => set('section', e.target.value)} disabled={busy}
+                className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50">
+                {SECTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+          )}
           <Dropdown
             label={isTransfer ? 'From Account (optional)' : 'Account (optional)'}
             options={accountOptions || []}
@@ -804,12 +817,22 @@ export default function MonthlyPage() {
       ) : monthPlans.length === 0 ? (
         <p className="text-center text-gray-400 py-8">No categories planned for this month yet.</p>
       ) : (
-        SECTIONS.map((section) => {
-          const sectionPlans = monthPlans.filter((p) => p.section === section);
+        DISPLAY_SECTIONS.map((section) => {
+          const sectionPlans = monthPlans.filter((p) => effectiveSection(p) === section);
           if (sectionPlans.length === 0) return null;
+          // Same magnitude convention as each row's own Actual (§31) - a
+          // section total mixing signed Income and signed Outflow actuals
+          // would be meaningless, so every row contributes its magnitude.
+          const sectionPlannedTotal = sectionPlans.reduce((sum, p) => sum + p.plannedAmount, 0);
+          const sectionActualTotal = sectionPlans.reduce((sum, p) => sum + Math.abs(actualForPlan(p)), 0);
           return (
             <div key={section} className="mb-4">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase mb-1">{section}</h3>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="text-xs font-semibold text-gray-400 uppercase">{section}</h3>
+                <span className="text-xs text-gray-500">
+                  Plan: {formatCurrency(sectionPlannedTotal)} · Actual: {formatCurrency(sectionActualTotal)}
+                </span>
+              </div>
               <div className="bg-white rounded-xl shadow-sm overflow-hidden">
                 {sectionPlans.map((p) => {
                   // actualForPlan returns a signed net (Money IN - Money OUT),
