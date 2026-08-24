@@ -6,7 +6,7 @@ import MilestoneRow from './MilestoneRow';
 import SummaryCard from './SummaryCard';
 import TransactionRow from './TransactionRow';
 
-export default function ProjectDetail({ project, spent, milestones, vendorRows, cashBookRows = [], onAddMilestone, onAddExpense, onEditProject, onClose }) {
+export default function ProjectDetail({ project, spent, milestones, vendorRows, cashBookRows = [], onAddMilestone, onAddExpense, onEditProject, onClose, suggestedPriority }) {
   const [showEditForm, setShowEditForm] = useState(false);
   const [editForm, setEditForm] = useState({
     budget: String(project.budget || ''),
@@ -15,7 +15,12 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
     manager: project.manager || '',
     status: project.status || 'Not Started',
     notes: project.notes || '',
-    payoffPriority: project.payoffPriority != null ? String(project.payoffPriority) : '',
+    // Suggests the next unassigned Payoff Priority instead of leaving it
+    // blank, but only when this project doesn't already have one - an
+    // already-set priority is never silently replaced with a suggestion.
+    payoffPriority: project.payoffPriority != null
+      ? String(project.payoffPriority)
+      : (suggestedPriority != null ? String(suggestedPriority) : ''),
   });
   const [isSaving, setIsSaving] = useState(false);
 

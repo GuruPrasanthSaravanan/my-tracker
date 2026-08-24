@@ -20,6 +20,7 @@ import Toast from '../components/Toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import { formatCurrency } from '../utils/formatters';
 import { computeCashBookSpendForAccount } from '../utils/aggregations';
+import { collectPriorityItems, suggestNextPriority, resolvePriorityShifts, applyPriorityShifts } from '../utils/priorityOrdering';
 import { Plus } from 'lucide-react';
 
 // "Obligations" rather than "Debts" - this page holds more than pure debt:
@@ -35,9 +36,22 @@ const SECTIONS = [
 ];
 
 export default function ObligationsPage() {
-  const { emiLoans, handLoans, creditCards, chitFunds, cashBook, lists } = useAppData();
+  const { emiLoans, handLoans, creditCards, chitFunds, cashBook, lists, projects } = useAppData();
   const accountOptions = lists.lists.accounts || [];
   const handleAddAccount = (value) => lists.addListItem('accounts', value);
+
+  // Payoff Priority is one shared ordering across Hand Loans, EMI Loans,
+  // and Projects (see debtAvalancheProjection.js / priorityOrdering.js) -
+  // computed once per render here so both the "suggest the next free
+  // number" default and the "shift everything else down" conflict
+  // resolution below stay in sync with the same live snapshot.
+  const priorityItems = collectPriorityItems({ handLoans: handLoans.loans, emiLoans: emiLoans.loans, projects: projects.projects });
+  const suggestedPriority = suggestNextPriority(priorityItems);
+  const resolvePriority = async (chosenPriority, excludeKey) => {
+    if (chosenPriority == null || chosenPriority === '') return;
+    const shifts = resolvePriorityShifts(priorityItems, chosenPriority, excludeKey);
+    if (shifts.length > 0) await applyPriorityShifts(shifts, { handLoans, emiLoans, projects });
+  };
   const [section, setSection] = useState('emi');
   const [toast, setToast] = useState(null);
   const notify = (message, type = 'success') => setToast({ message, type });
@@ -75,9 +89,12 @@ export default function ObligationsPage() {
   // ===== EMI handlers =====
   const handleSaveEMI = async (entry) => {
     try {
+      const chosenPriority = entry.payoffPriority ? parseInt(entry.payoffPriority) : null;
       if (editingEMILoan && selectedEMILoan) {
+        await resolvePriority(chosenPriority, `emi:${selectedEMILoan._rowIndex}`);
         await emiLoans.editLoan(selectedEMILoan._rowIndex, entry);
       } else {
+        await resolvePriority(chosenPriority, null);
         await emiLoans.addLoan(entry);
       }
       setShowEMIForm(false);
@@ -128,9 +145,12 @@ export default function ObligationsPage() {
   // ===== Hand loan handlers =====
   const handleSaveHandLoan = async (entry) => {
     try {
+      const chosenPriority = entry.payoffPriority ? parseInt(entry.payoffPriority) : null;
       if (editingHandLoan && selectedHandLoan) {
+        await resolvePriority(chosenPriority, `hand:${selectedHandLoan._rowIndex}`);
         await handLoans.editLoan(selectedHandLoan._rowIndex, entry);
       } else {
+        await resolvePriority(chosenPriority, null);
         await handLoans.addLoan(entry);
         // A new Lend/Debt only updates that loan's own tab - it doesn't
         // touch CashBook, so without this the money leaving/entering an
@@ -485,7 +505,7 @@ export default function ObligationsPage() {
       {/* ===== EMI Modals ===== */}
       {showEMIForm && !editingEMILoan && (
         <EMILoanForm onSave={handleSaveEMI} onClose={() => setShowEMIForm(false)}
-          accountOptions={accountOptions} onAddAccount={handleAddAccount} />
+          accountOptions={accountOptions} onAddAccount={handleAddAccount} suggestedPriority={suggestedPriority} />
       )}
 
       {selectedEMILoan && !editingEMILoan && !showEMIForm && !showPrepaymentForm && (
@@ -536,7 +556,7 @@ export default function ObligationsPage() {
       {/* ===== Hand Loan Modals (shared by Debts I Owe + Money Lent) ===== */}
       {showHandForm && !editingHandLoan && (
         <HandLoanForm direction={showHandForm} onSave={handleSaveHandLoan} onClose={() => setShowHandForm(null)}
-          accountOptions={accountOptions} onAddAccount={handleAddAccount} />
+          accountOptions={accountOptions} onAddAccount={handleAddAccount} suggestedPriority={suggestedPriority} />
       )}
 
       {selectedHandLoan && !editingHandLoan && !showHandPaymentForm && !editingHandPayment && (

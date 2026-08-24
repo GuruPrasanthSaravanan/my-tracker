@@ -3,11 +3,15 @@ import { X, Trash2 } from 'lucide-react';
 import { getTodayISO } from '../utils/formatters';
 import Dropdown from './Dropdown';
 
-export default function EMILoanForm({ initial, onSave, onDelete, onClose, accountOptions = [], onAddAccount }) {
+export default function EMILoanForm({ initial, onSave, onDelete, onClose, accountOptions = [], onAddAccount, suggestedPriority }) {
   const [form, setForm] = useState(initial || {
     name: '', principal: '', annualRate: '', tenureMonths: '',
     startDate: getTodayISO(), debitsFrom: '', status: 'Active', notes: '',
-    emiDate: '', actualEMI: '', payoffPriority: '',
+    emiDate: '', actualEMI: '',
+    // Suggests the next unassigned Payoff Priority instead of leaving it
+    // blank (see priorityOrdering.js) - still just a suggestion, the
+    // field stays editable/clearable like every other optional field.
+    payoffPriority: suggestedPriority != null ? String(suggestedPriority) : '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);

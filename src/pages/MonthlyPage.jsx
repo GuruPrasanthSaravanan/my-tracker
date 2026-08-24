@@ -306,7 +306,7 @@ function LoadTemplateModal({ template, monthPlans, onLoad, onClose }) {
 }
 
 export default function MonthlyPage() {
-  const { monthly, cashBook, lists, handLoans, emiLoans, projects, vendors } = useAppData();
+  const { monthly, cashBook, lists, handLoans, emiLoans, projects, vendors, chitFunds } = useAppData();
   const [month, setMonth] = useState(getTodayISO().slice(0, 7));
   const [showForm, setShowForm] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null);
@@ -423,10 +423,17 @@ export default function MonthlyPage() {
       remainingBudget: Math.max(0, p.budget - computeCombinedProjectSpend(vendors.rows, cashBook.rows, p.code)),
       endDatePlanned: p.endDatePlanned || null,
     }));
+  // Chit Funds don't get a Payoff Priority or join the priority-ordered
+  // list themselves - they only ever *free up* surplus once their known
+  // remaining contribution months elapse (see debtAvalancheProjection.js's
+  // activeChits doc for why winning/maturity timing is still excluded).
+  const activeChits = chitFunds.chits
+    .filter((c) => c.status !== 'Closed' && !c.isComplete)
+    .map((c) => ({ name: c.name, monthlyContribution: c.monthlyContribution, monthsRemaining: c.monthsRemaining }));
   const hasPayoffItems = payoffHandLoans.length > 0 || payoffEMILoans.length > 0 || payoffProjects.length > 0;
   const payoffPlan = hasPayoffItems
     ? projectPayoffPlan({
-        handLoans: payoffHandLoans, emiLoans: payoffEMILoans, projects: payoffProjects,
+        handLoans: payoffHandLoans, emiLoans: payoffEMILoans, projects: payoffProjects, activeChits,
         monthlySurplus: Math.max(0, plannedSavings), startDate: getTodayISO(),
       })
     : null;
@@ -652,9 +659,15 @@ export default function MonthlyPage() {
           </p>
         ) : (
         <>
-          <p className="text-xs text-gray-400 mb-3">
+          <p className={`text-xs text-gray-400 ${activeChits.length > 0 ? 'mb-1' : 'mb-3'}`}>
             Assumes {formatCurrency(Math.max(0, plannedSavings))}/month (this month's Planned Savings) stays constant.
           </p>
+          {activeChits.length > 0 && (
+            <p className="text-xs text-gray-400 mb-3">
+              Also assumes {activeChits.map((c) => c.name).join(', ')}'s contribution joins this pool once it
+              ends (not its win/maturity amount or timing, which can't be predicted).
+            </p>
+          )}
 
           {payoffPlan.neverCompletes ? (
             <p className="text-sm text-danger">Does not clear within {payoffPlan.months.length} months at this pace.</p>

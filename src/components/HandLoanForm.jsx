@@ -3,11 +3,14 @@ import { X, Trash2 } from 'lucide-react';
 import { getTodayISO } from '../utils/formatters';
 import Dropdown from './Dropdown';
 
-export default function HandLoanForm({ initial, direction, onSave, onDelete, onClose, accountOptions = [], onAddAccount }) {
+export default function HandLoanForm({ initial, direction, onSave, onDelete, onClose, accountOptions = [], onAddAccount, suggestedPriority }) {
   const [form, setForm] = useState(initial || {
     name: '', principal: '', annualRate: '0', startDate: getTodayISO(),
     direction: direction || 'Owe', debitsFrom: '', status: 'Active', notes: '',
-    payoffPriority: '',
+    // Suggests the next unassigned Payoff Priority instead of leaving it
+    // blank (see priorityOrdering.js) - still just a suggestion, the
+    // field stays editable/clearable like every other optional field.
+    payoffPriority: suggestedPriority != null ? String(suggestedPriority) : '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);

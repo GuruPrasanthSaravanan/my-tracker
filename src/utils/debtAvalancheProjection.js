@@ -70,6 +70,14 @@ function resolveEffectiveOrder(items, monthDate) {
  * @param {{ name: string, priority: number, outstandingPrincipal: number, accruedInterestSoFar: number, annualRate: number }[]} inputs.handLoans
  * @param {{ name: string, priority: number, outstandingBalance: number, annualRate: number, emi: number, remainingMonths: number }[]} inputs.emiLoans
  * @param {{ name: string, priority: number, remainingBudget: number, endDatePlanned: string|null }[]} inputs.projects
+ * @param {{ name: string, monthlyContribution: number, monthsRemaining: number }[]} [inputs.activeChits] - Chit
+ *   Funds still paying a monthly contribution. `monthsRemaining` is the number of contributions left
+ *   *as of today* (e.g. from `computeChitFundStatus`) - once that many simulated months pass, the
+ *   contribution stops and that amount joins the surplus pool, same as a completed EMI. This is
+ *   deliberately the *only* Chit Fund effect modeled - the contribution end date is a known, fixed
+ *   fact (duration is set upfront), unlike *winning*/maturity timing and payout amount, which this
+ *   engine never simulates (real auction outcomes aren't predictable - see bugs-and-lessons.md §20).
+ *   Chits don't participate in the priority-ordered payoff themselves, only in freeing up surplus.
  * @param {number} inputs.monthlySurplus - flat amount available for extra payments every month
  * @param {string} inputs.startDate - ISO date, month 1 of the simulation
  * @param {number} [inputs.maxMonths] - safety cap (default 120), same pattern as projectCreditCardPayoff
@@ -80,7 +88,7 @@ function resolveEffectiveOrder(items, monthDate) {
  *   neverCompletes: boolean,
  * }}
  */
-export function projectPayoffPlan({ handLoans = [], emiLoans = [], projects = [], monthlySurplus, startDate, maxMonths = 120 }) {
+export function projectPayoffPlan({ handLoans = [], emiLoans = [], projects = [], activeChits = [], monthlySurplus, startDate, maxMonths = 120 }) {
   // Working copies - never mutate the caller's input objects.
   const debts = handLoans
     .filter((l) => l.priority != null)
@@ -91,6 +99,7 @@ export function projectPayoffPlan({ handLoans = [], emiLoans = [], projects = []
   const projs = projects
     .filter((p) => p.priority != null)
     .map((p) => ({ ...p, kind: 'project', remaining: p.remainingBudget }));
+  const chits = activeChits.map((c) => ({ ...c }));
 
   const months = [];
   const milestones = [];
@@ -120,11 +129,15 @@ export function projectPayoffPlan({ handLoans = [], emiLoans = [], projects = []
     }
 
     // 3. This month's extra-payment pool - freed EMI installments join
-    // starting the month *after* they completed.
+    // starting the month *after* they completed; a Chit's contribution
+    // joins once its (already-known) remaining-months count has elapsed.
     freedEMIPool = emis
       .filter((e) => e.freedMonth != null && e.freedMonth < m)
       .reduce((sum, e) => sum + e.emi, 0);
-    const extraPool = { value: monthlySurplus + freedEMIPool };
+    const freedChitPool = chits
+      .filter((c) => c.monthsRemaining != null && m > c.monthsRemaining)
+      .reduce((sum, c) => sum + (c.monthlyContribution || 0), 0);
+    const extraPool = { value: monthlySurplus + freedEMIPool + freedChitPool };
 
     // 4. Resolve effective order for this month (deadline override for Projects).
     const items = [...debts, ...projs, ...emis].filter(

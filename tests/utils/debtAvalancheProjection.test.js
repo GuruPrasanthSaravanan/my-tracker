@@ -81,6 +81,29 @@ describe('projectPayoffPlan', () => {
     expect(result.milestones.map((m) => m.itemName)).toEqual(['Owe Loan']);
   });
 
+  it("frees a Chit Fund's monthly contribution into the surplus pool once its known remaining months elapse", () => {
+    const result = projectPayoffPlan({
+      handLoans: [{ name: 'Gold Loan', priority: 1, outstandingPrincipal: 100000, accruedInterestSoFar: 0, annualRate: 0 }],
+      emiLoans: [], projects: [],
+      activeChits: [{ name: 'Family Chit', monthlyContribution: 2000, monthsRemaining: 1 }],
+      monthlySurplus: 5000, startDate: '2026-01-01', maxMonths: 4,
+    });
+    // Month 1: still 1 contribution left (monthsRemaining=1), not freed yet.
+    expect(result.months[0].extraPaymentApplied['Gold Loan']).toBeCloseTo(5000, 0);
+    // Month 2 onward: contribution has ended, +2000 joins the pool.
+    expect(result.months[1].extraPaymentApplied['Gold Loan']).toBeCloseTo(7000, 0);
+  });
+
+  it('never uses a Chit Fund to fund anything before its contribution actually ends (already-complete chit frees immediately)', () => {
+    const result = projectPayoffPlan({
+      handLoans: [{ name: 'Gold Loan', priority: 1, outstandingPrincipal: 100000, accruedInterestSoFar: 0, annualRate: 0 }],
+      emiLoans: [], projects: [],
+      activeChits: [{ name: 'Finished Chit', monthlyContribution: 3000, monthsRemaining: 0 }],
+      monthlySurplus: 5000, startDate: '2026-01-01', maxMonths: 2,
+    });
+    expect(result.months[0].extraPaymentApplied['Gold Loan']).toBeCloseTo(8000, 0);
+  });
+
   it('returns an inert result when nothing has a priority set', () => {
     const result = projectPayoffPlan({
       handLoans: [{ name: 'No Priority Loan', priority: null, outstandingPrincipal: 1000, accruedInterestSoFar: 0, annualRate: 0 }],
