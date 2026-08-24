@@ -7,7 +7,7 @@ import {
   findNearMissForZeroActual, computeCombinedProjectSpend,
 } from '../utils/aggregations';
 import { projectPayoffPlan } from '../utils/debtAvalancheProjection';
-import { formatCurrency, formatDate, getTodayISO, shiftMonth, monthLabel } from '../utils/formatters';
+import { formatCurrency, getTodayISO, shiftMonth, monthLabel } from '../utils/formatters';
 import Dropdown from '../components/Dropdown';
 import PieChart from '../components/PieChart';
 import BarChart from '../components/BarChart';
@@ -30,6 +30,18 @@ const effectiveSection = (p) => (p.category === 'TRANSFER' ? 'Transfers' : p.sec
 function accountLabel(item) {
   if (item.account && item.toAccount) return `${item.account} \u2192 ${item.toAccount}`;
   return item.account || '';
+}
+
+/**
+ * "Oct 2026" - month and year only, no day. Used for the Debt Payoff
+ * Trajectory's projected dates, where the day-of-month is just whatever
+ * the simulation's internal date arithmetic landed on (it keeps today's
+ * day-of-month for every projected month) and isn't meaningful to show.
+ */
+function formatMonthYear(dateStr) {
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+  return date.toLocaleString('en', { month: 'short', year: 'numeric' });
 }
 
 function PlanForm({
@@ -678,11 +690,11 @@ export default function MonthlyPage() {
                 .sort((a, b) => a.clearedMonth - b.clearedMonth)
                 .map((m) => (
                   <p key={m.itemName} className="text-sm text-gray-700">
-                    <span className="font-medium text-gray-900">{m.itemName}</span> clears: Month {m.clearedMonth} ({formatDate(m.clearedDate)})
+                    <span className="font-medium text-gray-900">{m.itemName}</span> clears: Month {m.clearedMonth} ({formatMonthYear(m.clearedDate)})
                   </p>
                 ))}
               <p className="text-sm font-semibold text-success">
-                All cleared: Month {payoffPlan.allClearMonth} ({formatDate(payoffPlan.months[payoffPlan.allClearMonth - 1].date)})
+                All cleared: Month {payoffPlan.allClearMonth} ({formatMonthYear(payoffPlan.months[payoffPlan.allClearMonth - 1].date)})
               </p>
             </div>
           )}
@@ -692,7 +704,7 @@ export default function MonthlyPage() {
             <div className="mt-2 max-h-80 overflow-y-auto space-y-3">
               {payoffPlan.months.map((month, i) => (
                 <div key={i} className="border-b border-gray-100 pb-2">
-                  <p className="text-xs font-semibold text-gray-500">Month {i + 1} - {formatDate(month.date)}</p>
+                  <p className="text-xs font-semibold text-gray-500">Month {i + 1} - {formatMonthYear(month.date)}</p>
                   {Object.entries(month.extraPaymentApplied).map(([name, amt]) => (
                     <p key={name} className="text-xs text-gray-600 flex justify-between">
                       <span>{name}: +{formatCurrency(amt)} applied</span>
