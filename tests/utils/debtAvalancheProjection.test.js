@@ -43,51 +43,32 @@ describe('projectPayoffPlan', () => {
     expect(result.months[1].extraPaymentApplied['Gold Loan']).toBeCloseTo(8000, 0);
   });
 
-  it('accelerates a Project ahead of a lower-priority-number item to hit its own deadline', () => {
+  it('never lets a Project jump ahead of a lower-priority-number item, even with an urgent/passed deadline', () => {
+    // Regression test for the opposite of the old behavior: endDatePlanned
+    // must NOT reorder the cascade - Payoff Priority is the only thing
+    // that determines order, full stop (see bugs-and-lessons.md for why
+    // the earlier deadline-override was removed).
     const result = projectPayoffPlan({
-      handLoans: [{ name: 'Slow Loan', priority: 2, outstandingPrincipal: 100000, accruedInterestSoFar: 0, annualRate: 0 }],
+      handLoans: [{ name: 'Slow Loan', priority: 1, outstandingPrincipal: 100000, accruedInterestSoFar: 0, annualRate: 0 }],
       emiLoans: [],
-      projects: [{ name: 'Urgent Reno', priority: 3, remainingBudget: 10000, endDatePlanned: '2026-02-01' }],
-      monthlySurplus: 5000, startDate: '2026-01-01', maxMonths: 6,
-    });
-    // Urgent Reno's deadline is 1 month out - it must be funded before Slow Loan despite lower priority number.
-    expect(result.months[0].extraPaymentApplied['Urgent Reno']).toBeGreaterThan(0);
-  });
-
-  it('moves a deadline-pressured Project only as far forward as needed - not automatically to the very front, past every priority', () => {
-    // Regression test for a real bug: a naive "does *anything* sit ahead
-    // of it" check would yank Urgent Project to the front here too, past
-    // BOTH loans, even though Tiny Loan's need is small enough that
-    // there's still plenty of pool left for the Project after it.
-    const result = projectPayoffPlan({
-      handLoans: [
-        { name: 'Tiny Loan', priority: 1, outstandingPrincipal: 1000, accruedInterestSoFar: 0, annualRate: 0 },
-        { name: 'Big Loan', priority: 2, outstandingPrincipal: 100000, accruedInterestSoFar: 0, annualRate: 0 },
-      ],
-      emiLoans: [],
-      projects: [{ name: 'Modest Project', priority: 3, remainingBudget: 3000, endDatePlanned: '2026-03-01' }],
-      monthlySurplus: 5000, startDate: '2026-01-01', maxMonths: 6,
-    });
-    // Tiny Loan (priority 1, small need) should still be funded/cleared
-    // first, ahead of the Project, since letting it through still leaves
-    // enough of the pool for the Project's required pace this month.
-    expect(result.months[0].extraPaymentApplied['Tiny Loan']).toBe(1000);
-    // Modest Project needs 3000/2=1500 this month to stay on pace - it
-    // should get funded (jumping ahead of Big Loan, priority 2) since Big
-    // Loan's huge balance would otherwise consume the entire remaining pool.
-    expect(result.months[0].extraPaymentApplied['Modest Project']).toBeCloseTo(3000, 0);
-    // Big Loan (priority 2) gets whatever's left, not the Project's share.
-    expect(result.months[0].extraPaymentApplied['Big Loan']).toBeCloseTo(1000, 0);
-  });
-
-  it('treats a Project with an already-passed deadline as maximally urgent', () => {
-    const result = projectPayoffPlan({
-      handLoans: [{ name: 'Some Loan', priority: 1, outstandingPrincipal: 100000, accruedInterestSoFar: 0, annualRate: 0 }],
-      emiLoans: [],
-      projects: [{ name: 'Overdue Project', priority: 5, remainingBudget: 2000, endDatePlanned: '2020-01-01' }],
+      projects: [{ name: 'Overdue Project', priority: 2, remainingBudget: 2000, endDatePlanned: '2020-01-01' }],
       monthlySurplus: 5000, startDate: '2026-01-01', maxMonths: 3,
     });
-    expect(result.months[0].extraPaymentApplied['Overdue Project']).toBe(2000);
+    // Slow Loan (priority 1) takes the full pool first, regardless of the Project's already-passed deadline.
+    expect(result.months[0].extraPaymentApplied['Slow Loan']).toBeCloseTo(5000, 0);
+    expect(result.months[0].extraPaymentApplied['Overdue Project']).toBeUndefined();
+  });
+
+  it('funds a Project once its own priority position is reached, in the same pass as everything else', () => {
+    const result = projectPayoffPlan({
+      handLoans: [{ name: 'Tiny Loan', priority: 1, outstandingPrincipal: 1000, accruedInterestSoFar: 0, annualRate: 0 }],
+      emiLoans: [],
+      projects: [{ name: 'Reno', priority: 2, remainingBudget: 3000, endDatePlanned: '2026-02-01' }],
+      monthlySurplus: 5000, startDate: '2026-01-01', maxMonths: 3,
+    });
+    // Tiny Loan clears first (1000), leaving 4000 of the pool for Reno.
+    expect(result.months[0].extraPaymentApplied['Tiny Loan']).toBe(1000);
+    expect(result.months[0].extraPaymentApplied['Reno']).toBeCloseTo(3000, 0);
   });
 
   it('flags neverCompletes when surplus cannot clear everything within maxMonths', () => {
