@@ -74,8 +74,8 @@ function resolveEffectiveOrder(items, monthDate) {
  *   Funds still paying a monthly contribution. `monthsRemaining` is the number of contributions left
  *   *as of today* (e.g. from `computeChitFundStatus`) - once that many simulated months pass, the
  *   contribution stops and that amount joins the surplus pool, same as a completed EMI. This is
- *   deliberately the *only* Chit Fund effect modeled - the contribution end date is a known, fixed
- *   fact (duration is set upfront), unlike *winning*/maturity timing and payout amount, which this
+ *   deliberately the only Chit Fund effect modeled - the contribution end date is a known, fixed
+ *   fact (duration is set upfront), unlike winning/maturity timing and payout amount, which this
  *   engine never simulates (real auction outcomes aren't predictable - see bugs-and-lessons.md §20).
  *   Chits don't participate in the priority-ordered payoff themselves, only in freeing up surplus.
  * @param {number} inputs.monthlySurplus - flat amount available for extra payments every month
