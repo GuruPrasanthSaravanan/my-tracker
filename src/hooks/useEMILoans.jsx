@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
 import { readSheet, appendRowAt, updateRow, clearRow } from '../api/sheets';
 import { computeEMIStatus } from '../utils/loanCalculations';
+import { parsePayoffPriority } from '../utils/priorityOrdering';
 
 // EMILoans tab layout: [Name, Principal, AnnualRate, TenureMonths, StartDate, DebitsFrom,
 //   Status, Notes, EMIDate, ActualEMI, PayoffPriority]
@@ -95,7 +96,7 @@ export function useEMILoans() {
       notes: row[7] || '',
       emiDate: parseInt(row[8]) || null,
       actualEMI: parseFloat(row[9]) || null,
-      payoffPriority: row[10] ? parseInt(row[10]) : null,
+      payoffPriority: parsePayoffPriority(row[10]),
     }))
     .filter((loan) => loan.name); // skip cleared/blank rows
 

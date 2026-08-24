@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
 import { readSheet, appendRowAt, updateRow } from '../api/sheets';
+import { parsePayoffPriority } from '../utils/priorityOrdering';
 
 export function useProjects() {
   const { token } = useAuth();
@@ -75,7 +76,7 @@ export function useProjects() {
     manager: row[10] || '',
     status: row[11] || '',
     notes: row[12] || '',
-    payoffPriority: row[13] ? parseInt(row[13]) : null,
+    payoffPriority: parsePayoffPriority(row[13]),
   }));
 
   const parsedMilestones = milestones.map((row) => ({

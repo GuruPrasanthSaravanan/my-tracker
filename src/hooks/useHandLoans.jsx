@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../auth/useAuth';
 import { readSheet, appendRowAt, updateRow, clearRow } from '../api/sheets';
 import { computeSimpleInterestAccrued, splitPayment } from '../utils/loanCalculations';
+import { parsePayoffPriority } from '../utils/priorityOrdering';
 
 // HandLoans tab layout: [Name, Principal, AnnualRate, StartDate, Direction, DebitsFrom, Status, Notes, PayoffPriority]
 //   Direction: 'Owe' (I owe this) or 'Lent' (I lent this to someone)
@@ -72,7 +73,7 @@ export function useHandLoans() {
       debitsFrom: row[5] || '',
       status: row[6] || 'Active',
       notes: row[7] || '',
-      payoffPriority: row[8] ? parseInt(row[8]) : null,
+      payoffPriority: parsePayoffPriority(row[8]),
     }))
     .filter((loan) => loan.name);
 

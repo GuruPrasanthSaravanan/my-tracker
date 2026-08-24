@@ -8,6 +8,30 @@
  */
 
 /**
+ * Parses a raw Payoff Priority cell value into a plain integer or null.
+ * `readSheet` returns Google Sheets' *formatted* display value, not the
+ * raw number - if this column ever inherits number/currency/percentage
+ * formatting from an adjacent cell (a common Sheets quirk when a new
+ * column is typed into directly, bypassing the app's own form), a typed
+ * "1" can come back as something like "₹1.00" or "1.00%", which
+ * `parseInt` alone would silently turn into `NaN` (poisoning every sort/
+ * comparison downstream) instead of a clean value.
+ * Strips currency symbols/percent signs/thousands-separator commas but
+ * keeps the decimal point (stripping *all* non-digits, including the
+ * decimal point, would corrupt "₹1.00" into 100 instead of 1), then
+ * rounds to the nearest integer.
+ * @param {string|number|null|undefined} raw
+ * @returns {number|null}
+ */
+export function parsePayoffPriority(raw) {
+  if (raw == null || raw === '') return null;
+  const cleaned = String(raw).replace(/,/g, '').replace(/[^0-9.-]/g, '');
+  if (!cleaned) return null;
+  const parsed = parseFloat(cleaned);
+  return Number.isNaN(parsed) ? null : Math.round(parsed);
+}
+
+/**
  * Builds one combined, unique-keyed list of every item that currently has
  * a Payoff Priority set, across all three sources.
  * @param {{ handLoans?: object[], emiLoans?: object[], projects?: object[] }} sources
