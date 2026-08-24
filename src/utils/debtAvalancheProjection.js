@@ -33,8 +33,18 @@ function monthsBetween(fromDate, toDateStr) {
  * Resolves which order this month's extra-payment pool should cascade
  * through, applying the Project deadline override on top of the base
  * priority order. See the module docstring above for the rule.
+ *
+ * `poolSize` (this month's actual extra-payment pool) is required to
+ * compute this correctly - a naive "does *anything* sit ahead of it"
+ * check would trigger almost every month for almost any project (there's
+ * nearly always *some* positive balance ahead of it in a multi-loan
+ * priority list), yanking it to the very front and effectively ignoring
+ * every lower-priority-number item's own priority. Instead, a project is
+ * moved only as far forward as needed to guarantee `requiredThisMonth` is
+ * still available to it after everything genuinely ahead of it (in pool
+ * terms, not just position) has taken its share.
  */
-function resolveEffectiveOrder(items, monthDate) {
+function resolveEffectiveOrder(items, monthDate, poolSize) {
   const base = [...items].sort((a, b) => a.priority - b.priority);
   const projectsList = base.filter((it) => it.kind === 'project');
   if (projectsList.length === 0) return base;
@@ -43,24 +53,30 @@ function resolveEffectiveOrder(items, monthDate) {
   for (const proj of projectsList) {
     if (proj.remaining <= 0 || !proj.endDatePlanned) continue;
     const monthsUntilDeadline = monthsBetween(monthDate, proj.endDatePlanned);
+    effective = effective.filter((it) => it !== proj);
     if (monthsUntilDeadline <= 0) {
-      // Deadline missed or due now - maximally urgent.
-      effective = [proj, ...effective.filter((it) => it !== proj)];
+      // Deadline missed or due now - maximally urgent, no computation needed.
+      effective = [proj, ...effective];
       continue;
     }
     const requiredThisMonth = proj.remaining / monthsUntilDeadline;
-    const currentIndex = effective.indexOf(proj);
-    const amountAheadOfIt = effective
-      .slice(0, currentIndex)
-      .reduce((sum, it) => sum + (it.remaining || 0) + (it.accruedInterest || 0), 0);
-    // If anything at all sits ahead of it in the order, it risks not
-    // reaching its own required pace this month - move it to the front
-    // (conservative: guarantees the deadline is met, at the cost of
-    // possibly funding it a bit earlier than the bare minimum needed).
-    if (amountAheadOfIt > 0 && requiredThisMonth > 0) {
-      const others = effective.filter((it) => it !== proj);
-      effective = [proj, ...others];
+    // Walk the current order, accumulating how much each item ahead would
+    // actually consume from the pool - insert the project right before
+    // the first item whose cumulative consumption would leave less than
+    // `requiredThisMonth` remaining for it. Items with a smaller need than
+    // the room available stay ahead of the project untouched.
+    const budget = Math.max(0, poolSize - requiredThisMonth);
+    let cumulative = 0;
+    let insertAt = effective.length;
+    for (let idx = 0; idx < effective.length; idx++) {
+      const need = (effective[idx].remaining || 0) + (effective[idx].accruedInterest || 0);
+      if (cumulative + need > budget) {
+        insertAt = idx;
+        break;
+      }
+      cumulative += need;
     }
+    effective.splice(insertAt, 0, proj);
   }
   return effective;
 }
@@ -143,7 +159,7 @@ export function projectPayoffPlan({ handLoans = [], emiLoans = [], projects = []
     const items = [...debts, ...projs, ...emis].filter(
       (it) => it.remaining > 0 || (it.kind === 'hand' && it.accruedInterest > 0)
     );
-    const order = resolveEffectiveOrder(items, monthDate);
+    const order = resolveEffectiveOrder(items, monthDate, extraPool.value);
 
     // 5. Cascade the extra payment down the effective order.
     for (const item of order) {

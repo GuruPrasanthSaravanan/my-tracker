@@ -54,6 +54,32 @@ describe('projectPayoffPlan', () => {
     expect(result.months[0].extraPaymentApplied['Urgent Reno']).toBeGreaterThan(0);
   });
 
+  it('moves a deadline-pressured Project only as far forward as needed - not automatically to the very front, past every priority', () => {
+    // Regression test for a real bug: a naive "does *anything* sit ahead
+    // of it" check would yank Urgent Project to the front here too, past
+    // BOTH loans, even though Tiny Loan's need is small enough that
+    // there's still plenty of pool left for the Project after it.
+    const result = projectPayoffPlan({
+      handLoans: [
+        { name: 'Tiny Loan', priority: 1, outstandingPrincipal: 1000, accruedInterestSoFar: 0, annualRate: 0 },
+        { name: 'Big Loan', priority: 2, outstandingPrincipal: 100000, accruedInterestSoFar: 0, annualRate: 0 },
+      ],
+      emiLoans: [],
+      projects: [{ name: 'Modest Project', priority: 3, remainingBudget: 3000, endDatePlanned: '2026-03-01' }],
+      monthlySurplus: 5000, startDate: '2026-01-01', maxMonths: 6,
+    });
+    // Tiny Loan (priority 1, small need) should still be funded/cleared
+    // first, ahead of the Project, since letting it through still leaves
+    // enough of the pool for the Project's required pace this month.
+    expect(result.months[0].extraPaymentApplied['Tiny Loan']).toBe(1000);
+    // Modest Project needs 3000/2=1500 this month to stay on pace - it
+    // should get funded (jumping ahead of Big Loan, priority 2) since Big
+    // Loan's huge balance would otherwise consume the entire remaining pool.
+    expect(result.months[0].extraPaymentApplied['Modest Project']).toBeCloseTo(3000, 0);
+    // Big Loan (priority 2) gets whatever's left, not the Project's share.
+    expect(result.months[0].extraPaymentApplied['Big Loan']).toBeCloseTo(1000, 0);
+  });
+
   it('treats a Project with an already-passed deadline as maximally urgent', () => {
     const result = projectPayoffPlan({
       handLoans: [{ name: 'Some Loan', priority: 1, outstandingPrincipal: 100000, accruedInterestSoFar: 0, annualRate: 0 }],
