@@ -318,7 +318,7 @@ function LoadTemplateModal({ template, monthPlans, onLoad, onClose }) {
 }
 
 export default function MonthlyPage() {
-  const { monthly, cashBook, lists, handLoans, emiLoans, projects, vendors, chitFunds } = useAppData();
+  const { monthly, cashBook, lists, handLoans, emiLoans, projects, vendors, chitFunds, accountSettings } = useAppData();
   const [month, setMonth] = useState(getTodayISO().slice(0, 7));
   const [showForm, setShowForm] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null);
@@ -442,11 +442,18 @@ export default function MonthlyPage() {
   const activeChits = chitFunds.chits
     .filter((c) => c.status !== 'Closed' && !c.isComplete)
     .map((c) => ({ name: c.name, monthlyContribution: c.monthlyContribution, monthsRemaining: c.monthsRemaining }));
+  // One-time starting lump sum for month 1 only: current balance sitting
+  // above each account's own Min Balance buffer (the exact same
+  // `balance - minBalance` pattern computeUpcomingEMIFundingWarnings
+  // already uses) - cash already available today that isn't earmarked for
+  // anything else, distinct from the recurring monthlySurplus below.
+  const startingLumpSum = Array.from(cashBook.accountBalances.entries())
+    .reduce((sum, [account, balance]) => sum + Math.max(0, balance - (accountSettings.minBalances.get(account) || 0)), 0);
   const hasPayoffItems = payoffHandLoans.length > 0 || payoffEMILoans.length > 0 || payoffProjects.length > 0;
   const payoffPlan = hasPayoffItems
     ? projectPayoffPlan({
         handLoans: payoffHandLoans, emiLoans: payoffEMILoans, projects: payoffProjects, activeChits,
-        monthlySurplus: Math.max(0, plannedSavings), startDate: getTodayISO(),
+        monthlySurplus: Math.max(0, plannedSavings), startingLumpSum, startDate: getTodayISO(),
       })
     : null;
 
@@ -671,15 +678,23 @@ export default function MonthlyPage() {
           </p>
         ) : (
         <>
-          <p className={`text-xs text-gray-400 ${activeChits.length > 0 ? 'mb-1' : 'mb-3'}`}>
-            Assumes {formatCurrency(Math.max(0, plannedSavings))}/month (this month's Planned Savings) stays constant.
-          </p>
-          {activeChits.length > 0 && (
-            <p className="text-xs text-gray-400 mb-3">
-              Also assumes {activeChits.map((c) => c.name).join(', ')}'s contribution joins this pool once it
-              ends (not its win/maturity amount or timing, which can't be predicted).
+          <div className="space-y-0.5 mb-3">
+            <p className="text-xs text-gray-400">
+              Assumes {formatCurrency(Math.max(0, plannedSavings))}/month (this month's Planned Savings) stays constant.
             </p>
-          )}
+            {startingLumpSum > 0 && (
+              <p className="text-xs text-gray-400">
+                Plus a one-time {formatCurrency(startingLumpSum)} from current balances above each account's
+                Min Balance, applied this month only.
+              </p>
+            )}
+            {activeChits.length > 0 && (
+              <p className="text-xs text-gray-400">
+                Also assumes {activeChits.map((c) => c.name).join(', ')}'s contribution joins this pool once it
+                ends (not its win/maturity amount or timing, which can't be predicted).
+              </p>
+            )}
+          </div>
 
           {payoffPlan.neverCompletes ? (
             <p className="text-sm text-danger">Does not clear within {payoffPlan.months.length} months at this pace.</p>

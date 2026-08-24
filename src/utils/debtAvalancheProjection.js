@@ -95,6 +95,11 @@ function resolveEffectiveOrder(items, monthDate, poolSize) {
  *   engine never simulates (real auction outcomes aren't predictable - see bugs-and-lessons.md §20).
  *   Chits don't participate in the priority-ordered payoff themselves, only in freeing up surplus.
  * @param {number} inputs.monthlySurplus - flat amount available for extra payments every month
+ * @param {number} [inputs.startingLumpSum] - one-time amount added to *month 1 only* (default 0) -
+ *   e.g. current account balances above each account's own Min Balance buffer (see
+ *   computeUpcomingEMIFundingWarnings' identical `balance - minBalance` pattern) - cash already
+ *   sitting there today that isn't earmarked for anything else, distinct from `monthlySurplus`
+ *   (which recurs every month and is never double-counted with this).
  * @param {string} inputs.startDate - ISO date, month 1 of the simulation
  * @param {number} [inputs.maxMonths] - safety cap (default 120), same pattern as projectCreditCardPayoff
  * @returns {{
@@ -104,7 +109,7 @@ function resolveEffectiveOrder(items, monthDate, poolSize) {
  *   neverCompletes: boolean,
  * }}
  */
-export function projectPayoffPlan({ handLoans = [], emiLoans = [], projects = [], activeChits = [], monthlySurplus, startDate, maxMonths = 120 }) {
+export function projectPayoffPlan({ handLoans = [], emiLoans = [], projects = [], activeChits = [], monthlySurplus, startingLumpSum = 0, startDate, maxMonths = 120 }) {
   // Working copies - never mutate the caller's input objects.
   const debts = handLoans
     .filter((l) => l.priority != null)
@@ -153,7 +158,7 @@ export function projectPayoffPlan({ handLoans = [], emiLoans = [], projects = []
     const freedChitPool = chits
       .filter((c) => c.monthsRemaining != null && m > c.monthsRemaining)
       .reduce((sum, c) => sum + (c.monthlyContribution || 0), 0);
-    const extraPool = { value: monthlySurplus + freedEMIPool + freedChitPool };
+    const extraPool = { value: monthlySurplus + freedEMIPool + freedChitPool + (m === 1 ? startingLumpSum : 0) };
 
     // 4. Resolve effective order for this month (deadline override for Projects).
     const items = [...debts, ...projs, ...emis].filter(
