@@ -622,13 +622,23 @@ export default function MonthlyPage() {
         </div>
       </div>
 
-      {/* Debt Payoff Trajectory - only shown once at least one Hand Loan,
-          EMI Loan, or Project has an explicit Payoff Priority set (see
-          bugs-and-lessons.md §44). Simulates month by month using this
-          month's Planned Savings as a flat recurring surplus. */}
-      {hasPayoffItems && payoffPlan && (
-        <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
-          <h2 className="text-sm font-semibold text-gray-500 mb-1">Debt Payoff Trajectory</h2>
+      {/* Debt Payoff Trajectory - simulates month by month using this
+          month's Planned Savings as a flat recurring surplus, once at
+          least one Hand Loan/EMI Loan/Project has a Payoff Priority set
+          (see bugs-and-lessons.md §44). Always renders the card itself
+          (not hidden entirely) so the feature is discoverable even before
+          anything has been opted in - a card that silently doesn't render
+          at all looks identical to "this feature doesn't exist". */}
+      <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
+        <h2 className="text-sm font-semibold text-gray-500 mb-1">Debt Payoff Trajectory</h2>
+
+        {!hasPayoffItems || !payoffPlan ? (
+          <p className="text-sm text-gray-400">
+            Set a Payoff Priority on a Hand Loan, EMI Loan, or Project (edit it, look for the "Payoff Priority"
+            field) to include it here and see when it's projected to clear.
+          </p>
+        ) : (
+        <>
           <p className="text-xs text-gray-400 mb-3">
             Assumes {formatCurrency(Math.max(0, plannedSavings))}/month (this month's Planned Savings) stays constant.
           </p>
@@ -667,8 +677,9 @@ export default function MonthlyPage() {
               ))}
             </div>
           </details>
-        </div>
-      )}
+        </>
+        )}
+      </div>
 
       <div className="grid grid-cols-2 gap-3 mb-4">
         <div className="bg-white rounded-2xl p-4 shadow-sm">
