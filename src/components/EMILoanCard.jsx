@@ -1,4 +1,4 @@
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, formatDateWithYear } from '../utils/formatters';
 import ProgressBar from './ProgressBar';
 
 export default function EMILoanCard({ loan, onClick }) {
@@ -34,6 +34,11 @@ export default function EMILoanCard({ loan, onClick }) {
             <span>Outstanding: <span className="text-gray-900 font-medium">{formatCurrency(status.outstandingBalance)}</span></span>
             <span>@ {loan.annualRate}%</span>
           </div>
+          {!status.isComplete && status.expectedEndDate && (
+            <div className="text-xs text-gray-400 mt-1">
+              Ends: <span className="text-gray-900 font-medium">{formatDateWithYear(status.expectedEndDate)}</span>
+            </div>
+          )}
         </>
       ) : (
         <p className="text-xs text-gray-400">Missing start date or tenure - tap to complete details</p>

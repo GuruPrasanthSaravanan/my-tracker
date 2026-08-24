@@ -27,6 +27,23 @@ export function formatDate(dateStr) {
 }
 
 /**
+ * "1 Jul 2032" - like formatDate, but with the year too. formatDate omits
+ * the year everywhere else in this app because those dates are always
+ * within the current or nearby year (recent CashBook entries, this
+ * month's due dates) where it'd just be visual noise - but a date that
+ * can land years in the future (an EMI loan's expected end date, a
+ * multi-year Debt Payoff Trajectory milestone) is ambiguous without it.
+ */
+export function formatDateWithYear(dateStr) {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return dateStr;
+  const day = date.getDate();
+  const month = date.toLocaleString('en', { month: 'short' });
+  return `${day} ${month} ${date.getFullYear()}`;
+}
+
+/**
  * Formats a Date object as a local "YYYY-MM-DD" string using local calendar
  * getters (getFullYear/getMonth/getDate), NOT `toISOString()`.
  *

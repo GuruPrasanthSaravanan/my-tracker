@@ -171,6 +171,15 @@ export function computeEMIStatus(loan, asOfDate = new Date(), extraPayments = []
   if (loan.emiDate) nextDueDate.setDate(loan.emiDate);
   nextDueDate.setMonth(nextDueDate.getMonth() + 1 + installmentsPaid);
 
+  // Due date of the *final* installment - same disbursal-anchored logic as
+  // nextDueDate above, but offset by the whole (possibly prepayment-
+  // shortened) schedule length rather than installmentsPaid, so it's a
+  // fixed date independent of "as of when" this status was computed - the
+  // loan's actual expected end date, not just "next due date + remaining".
+  const expectedEndDate = new Date(start);
+  if (loan.emiDate) expectedEndDate.setDate(loan.emiDate);
+  expectedEndDate.setMonth(expectedEndDate.getMonth() + schedule.length);
+
   return {
     emi,
     installmentsPaid,
@@ -184,6 +193,7 @@ export function computeEMIStatus(loan, asOfDate = new Date(), extraPayments = []
     totalInterestPayable,
     isComplete: outstandingBalance <= 0.01,
     nextDueDate: outstandingBalance > 0.01 ? toLocalISODate(nextDueDate) : null,
+    expectedEndDate: toLocalISODate(expectedEndDate),
   };
 }
 

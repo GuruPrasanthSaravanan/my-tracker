@@ -135,6 +135,22 @@ describe('computeEMIStatus', () => {
     // 3 installments already elapsed as of Apr 1 (Feb 1, Mar 1, Apr 1) - the
     // NEXT (not-yet-elapsed) one is May 1, not Apr 1 itself.
     expect(status.nextDueDate).toBe('2026-05-01');
+    // The prepayment shortened the schedule below the original 12 months -
+    // expectedEndDate must reflect that shorter schedule, not the original tenure.
+    const monthsToEnd = (new Date(status.expectedEndDate).getFullYear() - 2026) * 12
+      + new Date(status.expectedEndDate).getMonth();
+    expect(monthsToEnd).toBe(status.effectiveTenureMonths);
+  });
+
+  it('computes expectedEndDate as startDate + tenureMonths when there are no prepayments', () => {
+    const status = computeEMIStatus({
+      principal: 100000,
+      annualRate: 12,
+      tenureMonths: 12,
+      startDate: '2026-01-01',
+    }, '2026-04-01');
+
+    expect(status.expectedEndDate).toBe('2027-01-01');
   });
 
   it('uses the emiDate to avoid over-counting installments near month boundaries', () => {
