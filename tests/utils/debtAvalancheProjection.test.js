@@ -121,6 +121,32 @@ describe('projectPayoffPlan', () => {
     expect(result.months[1].extraPaymentApplied['Gold Loan']).toBeCloseTo(5000, 0); // lump sum doesn't repeat
   });
 
+  it('reduces the pool in the specific month a one-time expense (e.g. an unpaid Credit Card bill) is due', () => {
+    const result = projectPayoffPlan({
+      handLoans: [{ name: 'Gold Loan', priority: 1, outstandingPrincipal: 100000, accruedInterestSoFar: 0, annualRate: 0 }],
+      emiLoans: [], projects: [],
+      oneTimeExpenses: [{ name: 'ICICI Card Bill', amount: 3000, dueDate: '2026-02-15' }],
+      monthlySurplus: 5000, startDate: '2026-01-01', maxMonths: 4,
+    });
+    // Month 1 (Jan): due date (Feb) hasn't arrived yet - full pool available.
+    expect(result.months[0].extraPaymentApplied['Gold Loan']).toBeCloseTo(5000, 0);
+    // Month 2 (Feb): the bill's due month - pool reduced by its amount.
+    expect(result.months[1].extraPaymentApplied['Gold Loan']).toBeCloseTo(2000, 0);
+    // Month 3 (Mar): back to the full pool, not repeated.
+    expect(result.months[2].extraPaymentApplied['Gold Loan']).toBeCloseTo(5000, 0);
+  });
+
+  it('treats an already-overdue one-time expense as due this month (month 1), and never lets the pool go negative', () => {
+    const result = projectPayoffPlan({
+      handLoans: [{ name: 'Gold Loan', priority: 1, outstandingPrincipal: 100000, accruedInterestSoFar: 0, annualRate: 0 }],
+      emiLoans: [], projects: [],
+      oneTimeExpenses: [{ name: 'Overdue Card Bill', amount: 9000, dueDate: '2020-01-01' }],
+      monthlySurplus: 5000, startDate: '2026-01-01', maxMonths: 2,
+    });
+    // Expense (9000) exceeds the whole month's surplus (5000) - nothing left for Gold Loan, not a negative pool.
+    expect(result.months[0].extraPaymentApplied['Gold Loan']).toBeUndefined();
+  });
+
   it('returns an inert result when nothing has a priority set', () => {
     const result = projectPayoffPlan({
       handLoans: [{ name: 'No Priority Loan', priority: null, outstandingPrincipal: 1000, accruedInterestSoFar: 0, annualRate: 0 }],

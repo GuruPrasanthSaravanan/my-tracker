@@ -27,6 +27,13 @@ function addMonths(dateStr, n) {
   return d;
 }
 
+/** Whole months between two dates, clamped to >= 0 (a date in the past counts as "this month"). */
+function monthsFromStart(startDate, targetDate) {
+  const start = new Date(startDate);
+  const target = new Date(targetDate);
+  return Math.max(0, (target.getFullYear() - start.getFullYear()) * 12 + (target.getMonth() - start.getMonth()));
+}
+
 /**
  * @param {Object} inputs
  * @param {{ name: string, priority: number, outstandingPrincipal: number, accruedInterestSoFar: number, annualRate: number }[]} inputs.handLoans
@@ -46,6 +53,15 @@ function addMonths(dateStr, n) {
  *   computeUpcomingEMIFundingWarnings' identical `balance - minBalance` pattern) - cash already
  *   sitting there today that isn't earmarked for anything else, distinct from `monthlySurplus`
  *   (which recurs every month and is never double-counted with this).
+ * @param {{ name: string, amount: number, dueDate: string }[]} [inputs.oneTimeExpenses] - known,
+ *   already-committed future outflows with a real due date (e.g. an unpaid Credit Card bill's
+ *   remaining balance) - reduces the extra-payment pool for whichever simulated month `dueDate`
+ *   falls into (a date in the past/this month counts as month 1), floored at 0 for that month
+ *   (never carries a negative balance into other months' pools). Deliberately just a pool
+ *   reduction, not a priority-ordered item and not a reordering trigger - see the module
+ *   docstring above for why deadline-driven reordering was removed entirely (bugs-and-lessons.md
+ *   §54); a one-time expense reducing the pool doesn't have that problem since it never changes
+ *   *which* priority-tagged item gets funded first, only *how much* is available that month.
  * @param {string} inputs.startDate - ISO date, month 1 of the simulation
  * @param {number} [inputs.maxMonths] - safety cap (default 120), same pattern as projectCreditCardPayoff
  * @returns {{
@@ -55,7 +71,7 @@ function addMonths(dateStr, n) {
  *   neverCompletes: boolean,
  * }}
  */
-export function projectPayoffPlan({ handLoans = [], emiLoans = [], projects = [], activeChits = [], monthlySurplus, startingLumpSum = 0, startDate, maxMonths = 120 }) {
+export function projectPayoffPlan({ handLoans = [], emiLoans = [], projects = [], activeChits = [], oneTimeExpenses = [], monthlySurplus, startingLumpSum = 0, startDate, maxMonths = 120 }) {
   // Working copies - never mutate the caller's input objects.
   const debts = handLoans
     .filter((l) => l.priority != null)
@@ -104,7 +120,12 @@ export function projectPayoffPlan({ handLoans = [], emiLoans = [], projects = []
     const freedChitPool = chits
       .filter((c) => c.monthsRemaining != null && m > c.monthsRemaining)
       .reduce((sum, c) => sum + (c.monthlyContribution || 0), 0);
-    const extraPool = { value: monthlySurplus + freedEMIPool + freedChitPool + (m === 1 ? startingLumpSum : 0) };
+    const oneTimeExpenseThisMonth = oneTimeExpenses
+      .filter((e) => monthsFromStart(startDate, e.dueDate) + 1 === m)
+      .reduce((sum, e) => sum + (e.amount || 0), 0);
+    const extraPool = {
+      value: Math.max(0, monthlySurplus + freedEMIPool + freedChitPool + (m === 1 ? startingLumpSum : 0) - oneTimeExpenseThisMonth),
+    };
 
     // 4. Strict priority order - lower priority number first, full stop.
     // No deadline-based reordering (see module docstring above for why).

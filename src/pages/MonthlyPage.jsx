@@ -318,7 +318,7 @@ function LoadTemplateModal({ template, monthPlans, onLoad, onClose }) {
 }
 
 export default function MonthlyPage() {
-  const { monthly, cashBook, lists, handLoans, emiLoans, projects, vendors, chitFunds, accountSettings } = useAppData();
+  const { monthly, cashBook, lists, handLoans, emiLoans, projects, vendors, chitFunds, accountSettings, creditCards } = useAppData();
   const [month, setMonth] = useState(getTodayISO().slice(0, 7));
   const [showForm, setShowForm] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null);
@@ -453,10 +453,20 @@ export default function MonthlyPage() {
   // anything else, distinct from the recurring monthlySurplus below.
   const startingLumpSum = Array.from(cashBook.accountBalances.entries())
     .reduce((sum, [account, balance]) => sum + Math.max(0, balance - (accountSettings.minBalances.get(account) || 0)), 0);
+  // Credit Cards otherwise never appear in this projection at all (assumed
+  // always paid in full monthly, per the original design) - but an
+  // already-billed, not-yet-paid statement is a real, already-committed
+  // near-term outflow, not a hypothetical one, so its remaining amount is
+  // deducted from whichever month it's actually due in (never repeated,
+  // and never turns into a priority-ordered target the way Hand/EMI Loans
+  // and Projects are - it's a one-time pool reduction, nothing more).
+  const oneTimeExpenses = creditCards.cards
+    .filter((c) => c.latestBill && c.outstanding > 0)
+    .map((c) => ({ name: `${c.name} bill`, amount: c.outstanding, dueDate: c.latestBill.dueDate }));
   const hasPayoffItems = payoffHandLoans.length > 0 || payoffEMILoans.length > 0 || payoffProjects.length > 0;
   const payoffPlan = hasPayoffItems
     ? projectPayoffPlan({
-        handLoans: payoffHandLoans, emiLoans: payoffEMILoans, projects: payoffProjects, activeChits,
+        handLoans: payoffHandLoans, emiLoans: payoffEMILoans, projects: payoffProjects, activeChits, oneTimeExpenses,
         monthlySurplus: Math.max(0, plannedSavings), startingLumpSum, startDate: getTodayISO(),
       })
     : null;
@@ -885,6 +895,12 @@ export default function MonthlyPage() {
                 <p className="text-xs text-gray-400">
                   Also assumes {activeChits.map((c) => c.name).join(', ')}'s contribution joins this pool once it
                   ends (not its win/maturity amount or timing, which can't be predicted).
+                </p>
+              )}
+              {oneTimeExpenses.length > 0 && (
+                <p className="text-xs text-gray-400">
+                  Reserves {oneTimeExpenses.map((e) => `${formatCurrency(e.amount)} for ${e.name}`).join(', ')} in
+                  its due month(s), since Credit Cards are otherwise assumed always paid in full.
                 </p>
               )}
             </div>
