@@ -3,7 +3,7 @@ import {
   sumByField, computeVendorBalances, computeAccountBalances, computeProjectSpent, computeCashBookSpendForAccount,
   computeCashBookProjectSpend, computeCombinedProjectSpend,
   computeMonthlyActuals, computeActualForPlan, computeActualForTransferPlan, computeMonthSurplus,
-  computeTypicalIncomeExpenses,
+  computeTypicalIncomeExpenses, computeRemainingPlannedOutflow,
   hasEMIBeenLoggedForMonth, computeUpcomingEMIFundingWarnings,
   computeTypeFrequencyForAccount, orderTypeOptionsForAccount, computeTypeSpendBreakdown, computeSubCategorySpendBreakdown,
   computePlannedBreakdown, computeAccountSpendBreakdown, computeTypeSpendBreakdownForAccount, computeAccountSpendBreakdownForType,
@@ -178,6 +178,33 @@ describe('computeActualForTransferPlan', () => {
       ['2026-08-05', 'Wants allowance', 'AXIS', 'TRANSFER', '10000', ''],
     ];
     expect(computeActualForTransferPlan(rows, '2026-09', 'ICICI', 'AXIS')).toBe(0);
+  });
+});
+
+describe('computeRemainingPlannedOutflow', () => {
+  const cashBookRows = [
+    ['2026-09-05', 'Rent', 'ICICI', 'RENT', '', '10000'],
+  ];
+  const plans = [
+    { month: '2026-09', category: 'RENT', section: 'My Outflows', plannedAmount: 20000 },
+    { month: '2026-09', category: 'SALARY', section: 'Income', plannedAmount: 150000 },
+    { month: '2026-09', category: 'TRANSFER', section: 'My Outflows', plannedAmount: 5000 },
+    { month: '2026-08', category: 'RENT', section: 'My Outflows', plannedAmount: 20000 }, // different month - ignored
+  ];
+
+  it('sums Planned minus Actual-so-far for outflow plans still pending this month', () => {
+    // Rent: planned 20000, only 10000 actually spent so far -> 10000 still pending.
+    expect(computeRemainingPlannedOutflow(plans, cashBookRows, '2026-09')).toBe(10000);
+  });
+
+  it('excludes Income and TRANSFER plans, and other months', () => {
+    const onlyIncomeAndTransfer = plans.filter((p) => p.category !== 'RENT');
+    expect(computeRemainingPlannedOutflow(onlyIncomeAndTransfer, cashBookRows, '2026-09')).toBe(0);
+  });
+
+  it('never returns a negative contribution for an already-overspent plan', () => {
+    const overspentRows = [['2026-09-05', 'Rent', 'ICICI', 'RENT', '', '25000']];
+    expect(computeRemainingPlannedOutflow(plans, overspentRows, '2026-09')).toBe(0);
   });
 });
 

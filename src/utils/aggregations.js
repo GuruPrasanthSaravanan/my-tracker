@@ -345,6 +345,32 @@ export function computeMonthSurplus(rows, month) {
 }
 
 /**
+ * How much of this month's Planned outflow hasn't actually left the
+ * accounts yet (Planned minus Actual-so-far, per plan, never negative -
+ * a plan already overspent doesn't create a *credit* for another plan).
+ * Used by the Projections page's starting lump sum: money currently
+ * sitting in an account isn't all "free" to throw at debt today - some of
+ * it is already earmarked for this month's still-pending rent/groceries/
+ * EMI/etc. Income plans and TRANSFER-category plans are excluded, same as
+ * Monthly's own Planned Savings calculation (`isRealFlow`) - a still-
+ * pending self-transfer between the user's own accounts doesn't reduce
+ * the *aggregate* balance the lump sum is computed from (see
+ * bugs-and-lessons.md).
+ * @param {{ month: string, category: string, section: string, plannedAmount: number, account?: string }[]} plans - from useMonthly().plans
+ * @param {string[][]} cashBookRows - CashBook rows [Date, Desc, Account, Type, IN, OUT]
+ * @param {string} month - "YYYY-MM"
+ * @returns {number}
+ */
+export function computeRemainingPlannedOutflow(plans, cashBookRows, month) {
+  return plans
+    .filter((p) => p.month === month && p.section !== 'Income' && p.category !== 'TRANSFER')
+    .reduce((sum, p) => {
+      const actual = Math.abs(computeActualForPlan(cashBookRows, month, p.category, p.account));
+      return sum + Math.max(0, p.plannedAmount - actual);
+    }, 0);
+}
+
+/**
  * Derives a stable "typical monthly income/expenses" figure from the
  * Monthly Template, for the Projections page - deliberately not a
  * separately-maintained number (see bugs-and-lessons.md's "derive, don't

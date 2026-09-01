@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAppData } from '../contexts/DataContext';
-import { computeCombinedProjectSpend, computeTypicalIncomeExpenses } from '../utils/aggregations';
+import { computeCombinedProjectSpend, computeTypicalIncomeExpenses, computeRemainingPlannedOutflow } from '../utils/aggregations';
 import { projectPayoffPlan } from '../utils/debtAvalancheProjection';
 import { formatCurrency, getTodayISO } from '../utils/formatters';
 import LoadingSkeleton from '../components/LoadingSkeleton';
@@ -118,10 +118,18 @@ export default function ProjectionsPage() {
   // One-time starting lump sum for month 1 only: current balance sitting
   // above each account's own Min Balance buffer (the exact same
   // `balance - minBalance` pattern computeUpcomingEMIFundingWarnings
-  // already uses) - cash already available today that isn't earmarked for
-  // anything else, distinct from the recurring typicalSurplus below.
-  const startingLumpSum = Array.from(cashBook.accountBalances.entries())
-    .reduce((sum, [account, balance]) => sum + Math.max(0, balance - (accountSettings.minBalances.get(account) || 0)), 0);
+  // already uses), MINUS whatever this month's Monthly Plan still expects
+  // to spend but hasn't yet - money sitting in an account today isn't all
+  // "free" for debt payoff if some of it is already earmarked for this
+  // month's still-pending rent/groceries/EMI/etc. that just hasn't
+  // happened as a CashBook entry yet. Distinct from the recurring
+  // typicalSurplus below (that's *next* month onward; this is *this*
+  // month's already-committed-but-not-yet-spent remainder).
+  const currentMonth = getTodayISO().slice(0, 7);
+  const remainingPlannedOutflow = computeRemainingPlannedOutflow(monthly.plans, cashBook.rows, currentMonth);
+  const startingLumpSum = Math.max(0, Array.from(cashBook.accountBalances.entries())
+    .reduce((sum, [account, balance]) => sum + Math.max(0, balance - (accountSettings.minBalances.get(account) || 0)), 0)
+    - remainingPlannedOutflow);
   // Credit Cards otherwise never appear in this projection at all (assumed
   // always paid in full monthly, per the original design) - but an
   // already-billed, not-yet-paid statement is a real, already-committed
@@ -201,7 +209,8 @@ export default function ProjectionsPage() {
               {startingLumpSum > 0 && (
                 <p className="text-xs text-gray-400">
                   Plus a one-time {formatCurrency(startingLumpSum)} from current balances above each account's
-                  Min Balance, applied this month only.
+                  Min Balance{remainingPlannedOutflow > 0 ? ` (after setting aside ${formatCurrency(remainingPlannedOutflow)} this month's Plan still expects to spend)` : ''},
+                  applied this month only.
                 </p>
               )}
               {activeChits.length > 0 && (
