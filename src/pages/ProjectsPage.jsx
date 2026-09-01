@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useAppData } from '../contexts/DataContext';
 import { computeCombinedProjectSpend } from '../utils/aggregations';
-import { collectPriorityItems, suggestNextPriority, resolvePriorityShifts, applyPriorityShifts } from '../utils/priorityOrdering';
 import ProjectCard from '../components/ProjectCard';
 import ProjectDetail from '../components/ProjectDetail';
 import FAB from '../components/FAB';
@@ -11,7 +10,7 @@ import EntryForm from '../components/EntryForm';
 import { formatCurrency, getTodayISO } from '../utils/formatters';
 
 export default function ProjectsPage() {
-  const { projects: projectsData, vendors, cashBook, lists: listsData, accountTypeFavorites, subCategories, handLoans, emiLoans } = useAppData();
+  const { projects: projectsData, vendors, cashBook, lists: listsData, accountTypeFavorites, subCategories } = useAppData();
   const { projects, milestones, isLoading, addProject, editProject, addMilestone, refresh: refreshProjects } = projectsData;
   const { rows: vendorRows, addEntry: addVendorEntry, refresh: refreshVendors } = vendors;
   const { lists, addListItem } = listsData;
@@ -19,11 +18,6 @@ export default function ProjectsPage() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [showForm, setShowForm] = useState(null); // null | 'project' | 'milestone' | 'vendor-expense' | 'direct-expense'
   const [toast, setToast] = useState(null);
-
-  // Payoff Priority is one shared ordering across Hand Loans, EMI Loans,
-  // and Projects (see debtAvalancheProjection.js / priorityOrdering.js).
-  const priorityItems = collectPriorityItems({ handLoans: handLoans.loans, emiLoans: emiLoans.loans, projects });
-  const suggestedPriority = suggestNextPriority(priorityItems);
 
   const handleSaveProject = async (entry) => {
     try {
@@ -37,11 +31,6 @@ export default function ProjectsPage() {
 
   const handleEditProject = async (entry) => {
     try {
-      const chosenPriority = entry.payoffPriority ? parseInt(entry.payoffPriority) : null;
-      if (chosenPriority != null) {
-        const shifts = resolvePriorityShifts(priorityItems, chosenPriority, `project:${selectedProject._rowIndex}`);
-        if (shifts.length > 0) await applyPriorityShifts(shifts, { handLoans, emiLoans, projects: projectsData });
-      }
       await editProject(selectedProject._rowIndex, entry);
       // Refresh selectedProject with updated data
       setSelectedProject(null);
@@ -135,7 +124,6 @@ export default function ProjectsPage() {
           onAddExpense={(mode) => setShowForm(mode === 'vendor' ? 'vendor-expense' : 'direct-expense')}
           onEditProject={handleEditProject}
           onClose={() => setSelectedProject(null)}
-          suggestedPriority={suggestedPriority}
         />
       )}
 

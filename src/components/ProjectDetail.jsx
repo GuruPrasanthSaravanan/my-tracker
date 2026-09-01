@@ -6,7 +6,7 @@ import MilestoneRow from './MilestoneRow';
 import SummaryCard from './SummaryCard';
 import TransactionRow from './TransactionRow';
 
-export default function ProjectDetail({ project, spent, milestones, vendorRows, cashBookRows = [], onAddMilestone, onAddExpense, onEditProject, onClose, suggestedPriority }) {
+export default function ProjectDetail({ project, spent, milestones, vendorRows, cashBookRows = [], onAddMilestone, onAddExpense, onEditProject, onClose }) {
   const [showEditForm, setShowEditForm] = useState(false);
   const [editForm, setEditForm] = useState({
     budget: String(project.budget || ''),
@@ -15,12 +15,6 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
     manager: project.manager || '',
     status: project.status || 'Not Started',
     notes: project.notes || '',
-    // Suggests the next unassigned Payoff Priority instead of leaving it
-    // blank, but only when this project doesn't already have one - an
-    // already-set priority is never silently replaced with a suggestion.
-    payoffPriority: project.payoffPriority != null
-      ? String(project.payoffPriority)
-      : (suggestedPriority != null ? String(suggestedPriority) : ''),
   });
   const [isSaving, setIsSaving] = useState(false);
 
@@ -68,6 +62,10 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
     setIsSaving(true);
     try {
       await onEditProject({
+        // Payoff Priority is set/reordered entirely on the Projections page
+        // now (see priorityOrdering.js) - this form has no field for it, so
+        // relying on this spread to carry `project.payoffPriority` through
+        // unchanged, rather than overriding it below.
         ...project,
         budget: editForm.budget,
         endDatePlanned: editForm.endDatePlanned,
@@ -75,7 +73,6 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
         manager: editForm.manager,
         status: editForm.status,
         notes: editForm.notes,
-        payoffPriority: editForm.payoffPriority ? parseInt(editForm.payoffPriority) : '',
       });
       setShowEditForm(false);
     } finally {
@@ -138,13 +135,6 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
                 <input type="text" value={editForm.manager}
                   onChange={(e) => setEditForm(f => ({ ...f, manager: e.target.value }))}
                   disabled={isSaving}
-                  className="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5 disabled:opacity-50" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Payoff Priority (optional)</label>
-                <input type="number" inputMode="numeric" value={editForm.payoffPriority}
-                  onChange={(e) => setEditForm(f => ({ ...f, payoffPriority: e.target.value }))}
-                  disabled={isSaving} placeholder="e.g. 1 = fund first"
                   className="w-full border rounded-lg px-2 py-1.5 text-sm mt-0.5 disabled:opacity-50" />
               </div>
               <div>

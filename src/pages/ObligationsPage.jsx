@@ -20,7 +20,6 @@ import Toast from '../components/Toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import { formatCurrency } from '../utils/formatters';
 import { computeCashBookSpendForAccount } from '../utils/aggregations';
-import { collectPriorityItems, suggestNextPriority, resolvePriorityShifts, applyPriorityShifts } from '../utils/priorityOrdering';
 import { Plus } from 'lucide-react';
 
 // "Obligations" rather than "Debts" - this page holds more than pure debt:
@@ -36,22 +35,9 @@ const SECTIONS = [
 ];
 
 export default function ObligationsPage() {
-  const { emiLoans, handLoans, creditCards, chitFunds, cashBook, lists, projects } = useAppData();
+  const { emiLoans, handLoans, creditCards, chitFunds, cashBook, lists } = useAppData();
   const accountOptions = lists.lists.accounts || [];
   const handleAddAccount = (value) => lists.addListItem('accounts', value);
-
-  // Payoff Priority is one shared ordering across Hand Loans, EMI Loans,
-  // and Projects (see debtAvalancheProjection.js / priorityOrdering.js) -
-  // computed once per render here so both the "suggest the next free
-  // number" default and the "shift everything else down" conflict
-  // resolution below stay in sync with the same live snapshot.
-  const priorityItems = collectPriorityItems({ handLoans: handLoans.loans, emiLoans: emiLoans.loans, projects: projects.projects });
-  const suggestedPriority = suggestNextPriority(priorityItems);
-  const resolvePriority = async (chosenPriority, excludeKey) => {
-    if (chosenPriority == null || chosenPriority === '') return;
-    const shifts = resolvePriorityShifts(priorityItems, chosenPriority, excludeKey);
-    if (shifts.length > 0) await applyPriorityShifts(shifts, { handLoans, emiLoans, projects });
-  };
   const [section, setSection] = useState('emi');
   const [toast, setToast] = useState(null);
   const notify = (message, type = 'success') => setToast({ message, type });
@@ -89,12 +75,14 @@ export default function ObligationsPage() {
   // ===== EMI handlers =====
   const handleSaveEMI = async (entry) => {
     try {
-      const chosenPriority = entry.payoffPriority ? parseInt(entry.payoffPriority) : null;
       if (editingEMILoan && selectedEMILoan) {
-        await resolvePriority(chosenPriority, `emi:${selectedEMILoan._rowIndex}`);
-        await emiLoans.editLoan(selectedEMILoan._rowIndex, entry);
+        // Payoff Priority is set/reordered entirely on the Projections page
+        // now (see priorityOrdering.js) - this form no longer has a field
+        // for it, so the existing value must be carried through explicitly,
+        // or editing any other field here would silently wipe it back to
+        // blank (editLoan writes whatever payoffPriority is on `entry`).
+        await emiLoans.editLoan(selectedEMILoan._rowIndex, { ...entry, payoffPriority: selectedEMILoan.payoffPriority });
       } else {
-        await resolvePriority(chosenPriority, null);
         await emiLoans.addLoan(entry);
       }
       setShowEMIForm(false);
@@ -145,12 +133,12 @@ export default function ObligationsPage() {
   // ===== Hand loan handlers =====
   const handleSaveHandLoan = async (entry) => {
     try {
-      const chosenPriority = entry.payoffPriority ? parseInt(entry.payoffPriority) : null;
       if (editingHandLoan && selectedHandLoan) {
-        await resolvePriority(chosenPriority, `hand:${selectedHandLoan._rowIndex}`);
-        await handLoans.editLoan(selectedHandLoan._rowIndex, entry);
+        // Payoff Priority is set/reordered entirely on the Projections page
+        // now (see priorityOrdering.js) - carry the existing value through
+        // explicitly, same reasoning as handleSaveEMI above.
+        await handLoans.editLoan(selectedHandLoan._rowIndex, { ...entry, payoffPriority: selectedHandLoan.payoffPriority });
       } else {
-        await resolvePriority(chosenPriority, null);
         await handLoans.addLoan(entry);
         // A new Lend/Debt only updates that loan's own tab - it doesn't
         // touch CashBook, so without this the money leaving/entering an
@@ -535,7 +523,7 @@ export default function ObligationsPage() {
       {/* ===== EMI Modals ===== */}
       {showEMIForm && !editingEMILoan && (
         <EMILoanForm onSave={handleSaveEMI} onClose={() => setShowEMIForm(false)}
-          accountOptions={accountOptions} onAddAccount={handleAddAccount} suggestedPriority={suggestedPriority} />
+          accountOptions={accountOptions} onAddAccount={handleAddAccount} />
       )}
 
       {selectedEMILoan && !editingEMILoan && !showEMIForm && !showPrepaymentForm && (
@@ -561,7 +549,6 @@ export default function ObligationsPage() {
             notes: selectedEMILoan.notes,
             emiDate: selectedEMILoan.emiDate ? String(selectedEMILoan.emiDate) : '',
             actualEMI: selectedEMILoan.actualEMI ? String(selectedEMILoan.actualEMI) : '',
-            payoffPriority: selectedEMILoan.payoffPriority != null ? String(selectedEMILoan.payoffPriority) : '',
           }}
           onSave={handleSaveEMI}
           onDelete={handleDeleteEMI}
@@ -587,7 +574,7 @@ export default function ObligationsPage() {
       {/* ===== Hand Loan Modals (shared by Debts I Owe + Money Lent) ===== */}
       {showHandForm && !editingHandLoan && (
         <HandLoanForm direction={showHandForm} onSave={handleSaveHandLoan} onClose={() => setShowHandForm(null)}
-          accountOptions={accountOptions} onAddAccount={handleAddAccount} suggestedPriority={suggestedPriority} />
+          accountOptions={accountOptions} onAddAccount={handleAddAccount} />
       )}
 
       {selectedHandLoan && !editingHandLoan && !showHandPaymentForm && !editingHandPayment && (
@@ -611,7 +598,6 @@ export default function ObligationsPage() {
             debitsFrom: selectedHandLoan.debitsFrom,
             status: selectedHandLoan.status,
             notes: selectedHandLoan.notes,
-            payoffPriority: selectedHandLoan.payoffPriority != null ? String(selectedHandLoan.payoffPriority) : '',
           }}
           onSave={handleSaveHandLoan}
           onDelete={handleDeleteHandLoan}

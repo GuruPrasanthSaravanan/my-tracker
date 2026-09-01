@@ -1,21 +1,23 @@
 /**
  * Payoff Priority is one shared ordering across three different tabs (Hand
- * Loans, EMI Loans, Projects) - see debtAvalancheProjection.js. These
- * helpers keep that shared numbering easy to work with from any of the
- * three pages that let a user set/change it (ObligationsPage.jsx for Hand
- * Loans/EMI Loans, ProjectsPage.jsx for Projects), without duplicating the
- * "collect everything with a priority" logic three times.
+ * Loans, EMI Loans, Projects) - see debtAvalancheProjection.js. Set via a
+ * single reorderable list on the Projections page (PriorityOrderManager),
+ * not typed as a number on each item's own form - the number itself is
+ * just position-in-list + 1, an implementation detail the user never sees.
+ * See bugs-and-lessons.md for why a typed-number UI (with auto-suggest and
+ * auto-shift-on-collision) was replaced with this - it was hard to update
+ * because the same shared ordering was scattered across three unrelated
+ * forms on two different pages.
  */
 
 /**
  * Parses a raw Payoff Priority cell value into a plain integer or null.
  * `readSheet` returns Google Sheets' *formatted* display value, not the
  * raw number - if this column ever inherits number/currency/percentage
- * formatting from an adjacent cell (a common Sheets quirk when a new
- * column is typed into directly, bypassing the app's own form), a typed
- * "1" can come back as something like "₹1.00" or "1.00%", which
- * `parseInt` alone would silently turn into `NaN` (poisoning every sort/
- * comparison downstream) instead of a clean value.
+ * formatting from an adjacent cell (a common Sheets quirk), a stored "1"
+ * can come back as something like "₹1.00" or "1.00%", which `parseInt`
+ * alone would silently turn into `NaN` (poisoning every sort/comparison
+ * downstream) instead of a clean value.
  * Strips currency symbols/percent signs/thousands-separator commas but
  * keeps the decimal point (stripping *all* non-digits, including the
  * decimal point, would corrupt "₹1.00" into 100 instead of 1), then
@@ -32,80 +34,53 @@ export function parsePayoffPriority(raw) {
 }
 
 /**
- * Builds one combined, unique-keyed list of every item that currently has
- * a Payoff Priority set, across all three sources.
+ * Splits every currently-eligible Hand Loan/EMI Loan/Project into two
+ * ordered lists for the Priority Order Manager: `included` (already has a
+ * Payoff Priority, sorted by it ascending - the order the projection
+ * currently uses) and `excluded` (no priority yet - not part of the
+ * projection). Callers pass already-filtered "eligible" arrays (active
+ * status, Owe-direction only for Hand Loans, etc.) - this function only
+ * cares about grouping/ordering by priority, not eligibility rules.
  * @param {{ handLoans?: object[], emiLoans?: object[], projects?: object[] }} sources
- * @returns {{ kind: 'hand'|'emi'|'project', key: string, rowIndex: number, priority: number, data: object }[]}
+ * @returns {{
+ *   included: { kind: 'hand'|'emi'|'project', rowIndex: number, name: string, priority: number, data: object }[],
+ *   excluded: { kind: 'hand'|'emi'|'project', rowIndex: number, name: string, priority: null, data: object }[],
+ * }}
  */
-export function collectPriorityItems({ handLoans = [], emiLoans = [], projects = [] } = {}) {
-  const items = [];
-  for (const l of handLoans) {
-    if (l.payoffPriority != null) {
-      items.push({ kind: 'hand', key: `hand:${l._rowIndex}`, rowIndex: l._rowIndex, priority: l.payoffPriority, data: l });
-    }
-  }
-  for (const l of emiLoans) {
-    if (l.payoffPriority != null) {
-      items.push({ kind: 'emi', key: `emi:${l._rowIndex}`, rowIndex: l._rowIndex, priority: l.payoffPriority, data: l });
-    }
-  }
-  for (const p of projects) {
-    if (p.payoffPriority != null) {
-      items.push({ kind: 'project', key: `project:${p._rowIndex}`, rowIndex: p._rowIndex, priority: p.payoffPriority, data: p });
-    }
-  }
-  return items;
+export function buildPriorityOrderItems({ handLoans = [], emiLoans = [], projects = [] } = {}) {
+  const items = [
+    ...handLoans.map((l) => ({ kind: 'hand', rowIndex: l._rowIndex, name: l.name, priority: l.payoffPriority, data: l })),
+    ...emiLoans.map((l) => ({ kind: 'emi', rowIndex: l._rowIndex, name: l.name, priority: l.payoffPriority, data: l })),
+    ...projects.map((p) => ({ kind: 'project', rowIndex: p._rowIndex, name: p.name || p.code, priority: p.payoffPriority, data: p })),
+  ];
+  return {
+    included: items.filter((i) => i.priority != null).sort((a, b) => a.priority - b.priority),
+    excluded: items.filter((i) => i.priority == null),
+  };
 }
 
 /**
- * The next unassigned priority number - one past the highest currently in
- * use across every item (Hand Loan, EMI Loan, or Project) that has one,
- * or 1 if nothing does yet. Used to default a new item's Payoff Priority
- * field instead of leaving it blank.
- * @param {{ priority: number }[]} items - from collectPriorityItems
- */
-export function suggestNextPriority(items) {
-  if (items.length === 0) return 1;
-  return Math.max(...items.map((i) => i.priority)) + 1;
-}
-
-/**
- * Given the full set of priority items and a newly-chosen priority for one
- * of them (identified by `excludeKey` - its own key if it already had a
- * priority, or null for a brand-new item), returns every *other* item that
- * needs to shift up by 1 to make room, so two items never end up sharing
- * the same priority. A single uniform +1 shift across everything at or
- * above the new value is sufficient in one pass - it can't introduce a new
- * collision, since every one of those items moves together and their
- * relative order/uniqueness is preserved.
- * @param {{ key: string, priority: number }[]} items - from collectPriorityItems
- * @param {number} newPriority
- * @param {string|null} excludeKey
- * @returns {{ kind: string, key: string, rowIndex: number, priority: number, data: object }[]} items needing an update, with their new (shifted) priority
- */
-export function resolvePriorityShifts(items, newPriority, excludeKey) {
-  return items
-    .filter((i) => i.key !== excludeKey && i.priority >= newPriority)
-    .map((i) => ({ ...i, priority: i.priority + 1 }));
-}
-
-/**
- * Applies a set of priority shifts (from resolvePriorityShifts) by calling
- * the appropriate hook's edit function for each affected item's kind.
- * Not a pure function (does real writes) - deliberately kept out of the
- * pure-function unit tests above, same distinction this app draws
- * everywhere else between pure utils/*.js and hook/page-level I/O.
- * @param {{kind: string, rowIndex: number, priority: number, data: object}[]} shifts
+ * Persists a full reordering: every item in `included` gets its Payoff
+ * Priority set to its position (1-based), every item in `excluded` that
+ * previously had one gets it cleared. Not a pure function (does real
+ * writes) - deliberately kept separate from the pure functions above,
+ * same distinction this app draws everywhere else between pure utils/*.js
+ * and hook/page-level I/O.
+ * @param {{ kind: string, rowIndex: number, priority: number|null, data: object }[]} included
+ * @param {{ kind: string, rowIndex: number, priority: number|null, data: object }[]} excluded
  * @param {{ handLoans: object, emiLoans: object, projects: object }} hooks - the useAppData() hook objects
  */
-export async function applyPriorityShifts(shifts, { handLoans, emiLoans, projects }) {
-  for (const s of shifts) {
-    if (s.kind === 'hand') {
-      await handLoans.editLoan(s.rowIndex, { ...s.data, payoffPriority: s.priority });
-    } else if (s.kind === 'emi') {
-      await emiLoans.editLoan(s.rowIndex, { ...s.data, payoffPriority: s.priority });
-    } else if (s.kind === 'project') {
-      await projects.editProject(s.rowIndex, { ...s.data, payoffPriority: s.priority });
-    }
+export async function savePriorityOrder(included, excluded, { handLoans, emiLoans, projects }) {
+  const writeOne = async (kind, rowIndex, data, priority) => {
+    const entry = { ...data, payoffPriority: priority };
+    if (kind === 'hand') await handLoans.editLoan(rowIndex, entry);
+    else if (kind === 'emi') await emiLoans.editLoan(rowIndex, entry);
+    else if (kind === 'project') await projects.editProject(rowIndex, entry);
+  };
+  for (const [index, item] of included.entries()) {
+    await writeOne(item.kind, item.rowIndex, item.data, index + 1);
+  }
+  for (const item of excluded) {
+    if (item.priority != null) await writeOne(item.kind, item.rowIndex, item.data, null);
   }
 }

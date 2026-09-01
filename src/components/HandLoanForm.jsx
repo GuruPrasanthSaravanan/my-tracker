@@ -3,14 +3,10 @@ import { X, Trash2 } from 'lucide-react';
 import { getTodayISO } from '../utils/formatters';
 import Dropdown from './Dropdown';
 
-export default function HandLoanForm({ initial, direction, onSave, onDelete, onClose, accountOptions = [], onAddAccount, suggestedPriority }) {
+export default function HandLoanForm({ initial, direction, onSave, onDelete, onClose, accountOptions = [], onAddAccount }) {
   const [form, setForm] = useState(initial || {
     name: '', principal: '', annualRate: '0', startDate: getTodayISO(),
     direction: direction || 'Owe', debitsFrom: '', status: 'Active', notes: '',
-    // Suggests the next unassigned Payoff Priority instead of leaving it
-    // blank (see priorityOrdering.js) - still just a suggestion, the
-    // field stays editable/clearable like every other optional field.
-    payoffPriority: suggestedPriority != null ? String(suggestedPriority) : '',
   });
   const [isSaving, setIsSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -114,16 +110,6 @@ export default function HandLoanForm({ initial, direction, onSave, onDelete, onC
               Also log this in CashBook ({isLent ? 'Money OUT' : 'Money IN'}{form.debitsFrom ? ` - ${form.debitsFrom}` : ''})
             </label>
           )}
-          <div>
-            <label className="text-xs text-gray-500">Payoff Priority (optional)</label>
-            <input type="number" inputMode="numeric" value={form.payoffPriority || ''}
-              onChange={(e) => set('payoffPriority', e.target.value)} disabled={busy}
-              placeholder="e.g. 1 = attack first" className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
-            <p className="text-xs text-gray-400 mt-0.5">
-              Lower number = paid off first in the Monthly page's Debt Payoff Trajectory. Leave blank to exclude
-              this loan from that projection entirely.
-            </p>
-          </div>
           <div>
             <label className="text-xs text-gray-500">Notes</label>
             <input type="text" value={form.notes} onChange={(e) => set('notes', e.target.value)} disabled={busy}

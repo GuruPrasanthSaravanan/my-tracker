@@ -5,6 +5,7 @@ import { projectPayoffPlan } from '../utils/debtAvalancheProjection';
 import { formatCurrency, getTodayISO } from '../utils/formatters';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import TemplateManager from '../components/TemplateManager';
+import PriorityOrderManager from '../components/PriorityOrderManager';
 import Toast from '../components/Toast';
 import { Settings2 } from 'lucide-react';
 
@@ -187,6 +188,8 @@ export default function ProjectionsPage() {
           </div>
         </div>
       </div>
+
+      <PriorityOrderManager handLoans={handLoans} emiLoans={emiLoans} projects={projects} />
 
       {/* Debt Payoff Trajectory - always renders the card itself (not
           hidden entirely behind hasPayoffItems) so the feature stays
