@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { useAppData } from '../contexts/DataContext';
-import { computeCombinedProjectSpend } from '../utils/aggregations';
+import { computeCombinedProjectSpend, computeTypicalIncomeExpenses } from '../utils/aggregations';
 import { projectPayoffPlan } from '../utils/debtAvalancheProjection';
 import { formatCurrency, getTodayISO } from '../utils/formatters';
 import LoadingSkeleton from '../components/LoadingSkeleton';
+import TemplateManager from '../components/TemplateManager';
+import Toast from '../components/Toast';
+import { Settings2 } from 'lucide-react';
 
 /**
  * "Oct 2026" - month and year only, no day. Used for the Debt Payoff
@@ -23,35 +26,56 @@ function formatMonthYear(dateStr) {
  * month" (a cash-flow-timing view, where a Credit Card bill payment or a
  * one-off Project expense are both legitimate real entries). Projections
  * answers a different question - "at my *typical* pace, when will I be
- * debt-free" - which needs a stable, manually-set surplus assumption, not
- * whatever this month's Monthly Plan happens to say (a month with an
- * unusual one-off expense or irregular income would otherwise skew a
- * multi-year projection). See bugs-and-lessons.md for the full reasoning
- * behind this split.
+ * debt-free" - which needs a stable assumption, not whatever this month's
+ * Monthly Plan happens to say (a month with an unusual one-off expense or
+ * irregular income would otherwise skew a multi-year projection).
+ *
+ * That "typical" figure is derived from the Monthly Template, not a
+ * separately-maintained number - the Template already represents "what's
+ * typical" (it's what pre-fills a brand-new month), so this is "derive,
+ * don't duplicate" rather than a second place to keep in sync. Managing
+ * the Template is available right here too, so there's no need to hop
+ * over to Monthly just to update it. See bugs-and-lessons.md.
  */
 export default function ProjectionsPage() {
   const {
     handLoans, emiLoans, projects, vendors, cashBook, chitFunds,
-    accountSettings, creditCards, projectionSettings,
+    accountSettings, creditCards, monthly, lists,
   } = useAppData();
 
-  const [editingSettings, setEditingSettings] = useState(false);
-  const [incomeInput, setIncomeInput] = useState(String(projectionSettings.typicalIncome || ''));
-  const [expensesInput, setExpensesInput] = useState(String(projectionSettings.typicalExpenses || ''));
-  const [isSaving, setIsSaving] = useState(false);
+  const [showTemplate, setShowTemplate] = useState(false);
+  const [toast, setToast] = useState(null);
+  const notify = (message, type = 'success') => setToast({ message, type });
 
-  const handleSaveSettings = async () => {
-    if (isSaving) return;
-    setIsSaving(true);
+  const categoryOptions = lists.lists.types || [];
+  const handleAddCategory = (value) => lists.addListItem('types', value);
+  const accountOptions = lists.lists.accounts || [];
+  const handleAddAccount = (value) => lists.addListItem('accounts', value);
+
+  const handleSaveTemplateItem = async (existing, entry) => {
     try {
-      await projectionSettings.save(parseFloat(incomeInput) || 0, parseFloat(expensesInput) || 0);
-      setEditingSettings(false);
-    } finally {
-      setIsSaving(false);
+      if (existing) {
+        await monthly.editTemplateItem(existing._rowIndex, entry);
+      } else {
+        await monthly.addTemplateItem(entry);
+      }
+      notify('Template updated!');
+    } catch {
+      notify('Failed to save template item.', 'error');
     }
   };
 
-  const typicalSurplus = projectionSettings.typicalIncome - projectionSettings.typicalExpenses;
+  const handleDeleteTemplateItem = async (existing) => {
+    try {
+      await monthly.deleteTemplateItem(existing._rowIndex);
+      notify('Removed from template.');
+    } catch {
+      notify('Failed to remove.', 'error');
+    }
+  };
+
+  const { income: typicalIncome, expenses: typicalExpenses } = computeTypicalIncomeExpenses(monthly.template);
+  const typicalSurplus = typicalIncome - typicalExpenses;
 
   // Only items with a Payoff Priority set participate (see
   // debtAvalancheProjection.js / bugs-and-lessons.md §44). Lend-direction
@@ -116,78 +140,44 @@ export default function ProjectionsPage() {
       })
     : null;
 
-  if (handLoans.isLoading || emiLoans.isLoading || projects.isLoading) {
+  if (handLoans.isLoading || emiLoans.isLoading || projects.isLoading || monthly.isLoading) {
     return <LoadingSkeleton rows={4} />;
   }
 
   return (
     <div>
-      <h1 className="text-lg font-bold mb-3">Projections</h1>
+      <div className="flex items-center justify-between mb-3">
+        <h1 className="text-lg font-bold">Projections</h1>
+        <button onClick={() => setShowTemplate(true)} className="text-xs text-gray-500 font-medium flex items-center gap-1">
+          <Settings2 size={14} /> Manage Template
+        </button>
+      </div>
 
-      {/* Typical Monthly Income/Expenses - a stable, manually-set
-          assumption, deliberately separate from Monthly's own Planned
-          Savings (see module docstring above). */}
+      {/* Typical Monthly Income/Expenses - derived live from the Monthly
+          Template (see module docstring above), not a separately-typed
+          number. Editing it means editing the Template, via the button
+          above - kept in one place rather than two. */}
       <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-gray-500">Typical Monthly Surplus</h2>
-          {!editingSettings && (
-            <button onClick={() => {
-              setIncomeInput(String(projectionSettings.typicalIncome || ''));
-              setExpensesInput(String(projectionSettings.typicalExpenses || ''));
-              setEditingSettings(true);
-            }} className="text-xs text-primary font-medium">Edit</button>
-          )}
-        </div>
-
-        {editingSettings ? (
-          <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-xs text-gray-500">Typical Monthly Income</label>
-                <input type="number" inputMode="numeric" value={incomeInput}
-                  onChange={(e) => setIncomeInput(e.target.value)} disabled={isSaving}
-                  placeholder="0" className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-500">Typical Monthly Expenses</label>
-                <input type="number" inputMode="numeric" value={expensesInput}
-                  onChange={(e) => setExpensesInput(e.target.value)} disabled={isSaving}
-                  placeholder="0" className="w-full border rounded-lg px-3 py-2 mt-0.5 disabled:opacity-50" />
-              </div>
-            </div>
-            <p className="text-xs text-gray-400">
-              A stable, manually-set figure for this projection only - not derived from any specific month's
-              Monthly Plan, so a one-off Project expense or irregular income here doesn't skew the projection.
+        <h2 className="text-sm font-semibold text-gray-500 mb-2">Typical Monthly Surplus</h2>
+        <p className="text-xs text-gray-400 mb-3">
+          Derived from your Monthly Template - tap "Manage Template" above to update it.
+        </p>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <p className="text-xs text-gray-500">Income</p>
+            <p className="text-lg font-bold text-gray-900">{formatCurrency(typicalIncome)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Expenses</p>
+            <p className="text-lg font-bold text-gray-900">{formatCurrency(typicalExpenses)}</p>
+          </div>
+          <div className="col-span-2 border-t border-gray-100 pt-2">
+            <p className="text-xs text-gray-500">Surplus available for debt payoff</p>
+            <p className={`text-xl font-bold ${typicalSurplus >= 0 ? 'text-primary' : 'text-danger'}`}>
+              {formatCurrency(typicalSurplus)}/month
             </p>
-            <div className="flex gap-2">
-              <button onClick={handleSaveSettings} disabled={isSaving}
-                className="flex-1 bg-primary text-white py-2 rounded-lg text-sm font-medium disabled:opacity-60">
-                {isSaving ? 'Saving...' : 'Save'}
-              </button>
-              <button onClick={() => setEditingSettings(false)} disabled={isSaving}
-                className="flex-1 bg-gray-100 text-gray-600 py-2 rounded-lg text-sm font-medium disabled:opacity-60">
-                Cancel
-              </button>
-            </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-xs text-gray-500">Income</p>
-              <p className="text-lg font-bold text-gray-900">{formatCurrency(projectionSettings.typicalIncome)}</p>
-            </div>
-            <div>
-              <p className="text-xs text-gray-500">Expenses</p>
-              <p className="text-lg font-bold text-gray-900">{formatCurrency(projectionSettings.typicalExpenses)}</p>
-            </div>
-            <div className="col-span-2 border-t border-gray-100 pt-2">
-              <p className="text-xs text-gray-500">Surplus available for debt payoff</p>
-              <p className={`text-xl font-bold ${typicalSurplus >= 0 ? 'text-primary' : 'text-danger'}`}>
-                {formatCurrency(typicalSurplus)}/month
-              </p>
-            </div>
-          </div>
-        )}
+        </div>
       </div>
 
       {/* Debt Payoff Trajectory - always renders the card itself (not
@@ -265,6 +255,21 @@ export default function ProjectionsPage() {
           </>
         )}
       </div>
+
+      {showTemplate && (
+        <TemplateManager
+          template={monthly.template}
+          categoryOptions={categoryOptions}
+          onAddCategory={handleAddCategory}
+          accountOptions={accountOptions}
+          onAddAccount={handleAddAccount}
+          onSave={handleSaveTemplateItem}
+          onDelete={handleDeleteTemplateItem}
+          onClose={() => setShowTemplate(false)}
+        />
+      )}
+
+      {toast && <Toast {...toast} onClose={() => setToast(null)} />}
     </div>
   );
 }

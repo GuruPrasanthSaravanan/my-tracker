@@ -345,6 +345,31 @@ export function computeMonthSurplus(rows, month) {
 }
 
 /**
+ * Derives a stable "typical monthly income/expenses" figure from the
+ * Monthly Template, for the Projections page - deliberately not a
+ * separately-maintained number (see bugs-and-lessons.md's "derive, don't
+ * duplicate" principle, already used everywhere else in this app for
+ * EMI/Chit Fund balances). The Template already represents "what's
+ * typical" (it's what pre-fills a brand-new month), so summing it directly
+ * avoids a second place to keep in sync as income/recurring bills change.
+ * TRANSFER-category template items are excluded, same as Monthly's own
+ * Planned Savings calculation (`isRealFlow`) - a self-transfer isn't real
+ * income or an expense.
+ * @param {{ category: string, section: string, defaultPlannedAmount: number }[]} template - from useMonthly().template
+ * @returns {{ income: number, expenses: number }}
+ */
+export function computeTypicalIncomeExpenses(template) {
+  let income = 0;
+  let expenses = 0;
+  for (const t of template) {
+    if (t.category === 'TRANSFER') continue;
+    if (t.section === 'Income') income += t.defaultPlannedAmount;
+    else expenses += t.defaultPlannedAmount;
+  }
+  return { income, expenses };
+}
+
+/**
  * Counts how many times each Type has been used with a given Account in
  * CashBook history, most-used first - the "auto-learned" half of the
  * Account -> Type ordering (see `orderTypeOptionsForAccount`).

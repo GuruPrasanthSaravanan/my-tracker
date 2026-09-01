@@ -3,6 +3,7 @@ import {
   sumByField, computeVendorBalances, computeAccountBalances, computeProjectSpent, computeCashBookSpendForAccount,
   computeCashBookProjectSpend, computeCombinedProjectSpend,
   computeMonthlyActuals, computeActualForPlan, computeActualForTransferPlan, computeMonthSurplus,
+  computeTypicalIncomeExpenses,
   hasEMIBeenLoggedForMonth, computeUpcomingEMIFundingWarnings,
   computeTypeFrequencyForAccount, orderTypeOptionsForAccount, computeTypeSpendBreakdown, computeSubCategorySpendBreakdown,
   computePlannedBreakdown, computeAccountSpendBreakdown, computeTypeSpendBreakdownForAccount, computeAccountSpendBreakdownForType,
@@ -177,6 +178,30 @@ describe('computeActualForTransferPlan', () => {
       ['2026-08-05', 'Wants allowance', 'AXIS', 'TRANSFER', '10000', ''],
     ];
     expect(computeActualForTransferPlan(rows, '2026-09', 'ICICI', 'AXIS')).toBe(0);
+  });
+});
+
+describe('computeTypicalIncomeExpenses', () => {
+  it('sums Income-section items as income and everything else as expenses', () => {
+    const template = [
+      { category: 'SALARY', section: 'Income', defaultPlannedAmount: 150000 },
+      { category: 'SALARY', section: 'Income', defaultPlannedAmount: 110000 },
+      { category: 'EMI', section: 'My Outflows', defaultPlannedAmount: 70000 },
+      { category: 'WANTS', section: 'Wife Outflows', defaultPlannedAmount: 15000 },
+    ];
+    expect(computeTypicalIncomeExpenses(template)).toEqual({ income: 260000, expenses: 85000 });
+  });
+
+  it('excludes TRANSFER-category items entirely, same as Monthly\'s own Planned Savings', () => {
+    const template = [
+      { category: 'SALARY', section: 'Income', defaultPlannedAmount: 100000 },
+      { category: 'TRANSFER', section: 'My Outflows', defaultPlannedAmount: 20000 },
+    ];
+    expect(computeTypicalIncomeExpenses(template)).toEqual({ income: 100000, expenses: 0 });
+  });
+
+  it('returns zeros for an empty template', () => {
+    expect(computeTypicalIncomeExpenses([])).toEqual({ income: 0, expenses: 0 });
   });
 });
 
