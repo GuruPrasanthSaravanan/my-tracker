@@ -31,6 +31,22 @@ describe('projectPayoffPlan', () => {
     expect(result.months[0].extraPaymentApplied['Big Loan']).toBeCloseTo(4000, 0);
   });
 
+  it("splits each EMI installment into interest (on the current balance) and principal, instead of treating the whole EMI as principal", () => {
+    // Regression test for a real bug: an earlier version subtracted the
+    // whole EMI amount from the balance every month, as if 100% of it
+    // were principal - this cleared EMI loans unrealistically fast,
+    // understating how much of each payment is actually interest.
+    const result = projectPayoffPlan({
+      handLoans: [], projects: [],
+      emiLoans: [{ name: 'Test EMI', priority: 1, outstandingBalance: 100000, annualRate: 12, emi: 5000, remainingMonths: 24 }],
+      monthlySurplus: 0, startDate: '2026-01-01', maxMonths: 2,
+    });
+    // Month 1: interest = 100000 * 1% = 1000; principal = 5000 - 1000 = 4000; balance = 96000 (not 95000).
+    expect(result.months[0].remaining['Test EMI']).toBeCloseTo(96000, 0);
+    // Month 2: interest = 96000 * 1% = 960; principal = 5000 - 960 = 4040; balance = 91960.
+    expect(result.months[1].remaining['Test EMI']).toBeCloseTo(91960, 0);
+  });
+
   it("frees an EMI loan's installment into the surplus pool the month after it completes", () => {
     const result = projectPayoffPlan({
       handLoans: [{ name: 'Gold Loan', priority: 2, outstandingPrincipal: 100000, accruedInterestSoFar: 0, annualRate: 0 }],

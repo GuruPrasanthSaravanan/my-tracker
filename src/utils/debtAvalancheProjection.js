@@ -93,11 +93,22 @@ export function projectPayoffPlan({ handLoans = [], emiLoans = [], projects = []
     const extraApplied = {};
 
     // 1. Fixed EMI installments - every EMI loan pays its normal schedule
-    // regardless of priority.
+    // regardless of priority. Reducing-balance amortization, same formula
+    // as loanCalculations.js's buildAmortizationSchedule (which this
+    // engine doesn't reuse directly since it needs to track a live,
+    // mutating `remaining` alongside extra/priority-driven payments) -
+    // each EMI splits into interest (on the *current* balance) and
+    // principal; only the principal portion reduces the balance. An
+    // earlier version of this loop subtracted the whole EMI as if it were
+    // 100% principal, which cleared every EMI loan unrealistically fast
+    // (understating how much of each payment is actually interest,
+    // especially early in a loan's tenure) - see bugs-and-lessons.md.
     for (const e of emis) {
       if (e.remaining <= 0) continue;
-      const payment = Math.min(e.emi, e.remaining);
-      e.remaining -= payment;
+      const monthlyRate = (e.annualRate || 0) / 12 / 100;
+      const interest = e.remaining * monthlyRate;
+      const principalComponent = Math.min(Math.max(e.emi - interest, 0), e.remaining);
+      e.remaining -= principalComponent;
       if (e.remaining <= 0 && !e.freedThisSim) {
         e.freedThisSim = true;
         e.freedMonth = m;
