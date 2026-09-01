@@ -81,7 +81,13 @@ export default function ObligationsPage() {
         // for it, so the existing value must be carried through explicitly,
         // or editing any other field here would silently wipe it back to
         // blank (editLoan writes whatever payoffPriority is on `entry`).
-        await emiLoans.editLoan(selectedEMILoan._rowIndex, { ...entry, payoffPriority: selectedEMILoan.payoffPriority });
+        // Closing the loan here is the one exception - a Closed/complete
+        // loan is already excluded from the Priority Order Manager and the
+        // projection itself (both filter on status/isComplete), so a
+        // leftover priority number would just be stale, invisible data
+        // with no way left to view/clear it - clear it proactively instead.
+        const payoffPriority = entry.status === 'Closed' ? null : selectedEMILoan.payoffPriority;
+        await emiLoans.editLoan(selectedEMILoan._rowIndex, { ...entry, payoffPriority });
       } else {
         await emiLoans.addLoan(entry);
       }
@@ -136,8 +142,10 @@ export default function ObligationsPage() {
       if (editingHandLoan && selectedHandLoan) {
         // Payoff Priority is set/reordered entirely on the Projections page
         // now (see priorityOrdering.js) - carry the existing value through
-        // explicitly, same reasoning as handleSaveEMI above.
-        await handLoans.editLoan(selectedHandLoan._rowIndex, { ...entry, payoffPriority: selectedHandLoan.payoffPriority });
+        // explicitly, and clear it on Closed, same reasoning as
+        // handleSaveEMI above.
+        const payoffPriority = entry.status === 'Closed' ? null : selectedHandLoan.payoffPriority;
+        await handLoans.editLoan(selectedHandLoan._rowIndex, { ...entry, payoffPriority });
       } else {
         await handLoans.addLoan(entry);
         // A new Lend/Debt only updates that loan's own tab - it doesn't

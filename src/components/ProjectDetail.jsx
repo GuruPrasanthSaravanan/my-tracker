@@ -61,11 +61,16 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
     if (isSaving) return;
     setIsSaving(true);
     try {
+      // Payoff Priority is set/reordered entirely on the Projections page
+      // now (see priorityOrdering.js) - this form has no field for it, so
+      // relying on the spread below to carry `project.payoffPriority`
+      // through unchanged - except when this save marks the project
+      // Completed or sets an actual end date, either of which already
+      // excludes it from the Priority Order Manager and the projection
+      // itself. A leftover priority number would just be stale, invisible
+      // data with no way left to view/clear it - clear it proactively.
+      const becomingIneligible = editForm.status === 'Completed' || !!editForm.endDateActual;
       await onEditProject({
-        // Payoff Priority is set/reordered entirely on the Projections page
-        // now (see priorityOrdering.js) - this form has no field for it, so
-        // relying on this spread to carry `project.payoffPriority` through
-        // unchanged, rather than overriding it below.
         ...project,
         budget: editForm.budget,
         endDatePlanned: editForm.endDatePlanned,
@@ -73,6 +78,7 @@ export default function ProjectDetail({ project, spent, milestones, vendorRows, 
         manager: editForm.manager,
         status: editForm.status,
         notes: editForm.notes,
+        payoffPriority: becomingIneligible ? null : project.payoffPriority,
       });
       setShowEditForm(false);
     } finally {
