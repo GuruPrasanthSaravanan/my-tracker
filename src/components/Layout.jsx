@@ -8,6 +8,7 @@ import ProjectsPage from '../pages/ProjectsPage';
 import ObligationsPage from '../pages/ObligationsPage';
 import DashboardPage from '../pages/DashboardPage';
 import MonthlyPage from '../pages/MonthlyPage';
+import ProjectionsPage from '../pages/ProjectionsPage';
 import NetWorthPage from '../pages/NetWorthPage';
 import SettingsPage from '../pages/SettingsPage';
 
@@ -33,6 +34,7 @@ export default function Layout() {
             <Route path="/obligations" element={<ObligationsPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/monthly" element={<MonthlyPage />} />
+            <Route path="/projections" element={<ProjectionsPage />} />
             <Route path="/networth" element={<NetWorthPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>

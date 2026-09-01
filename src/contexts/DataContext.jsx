@@ -15,6 +15,7 @@ import { useNetWorth } from '../hooks/useNetWorth';
 import { useAccountTypeFavorites } from '../hooks/useAccountTypeFavorites';
 import { useSubCategories } from '../hooks/useSubCategories';
 import { useChitFunds } from '../hooks/useChitFunds';
+import { useProjectionSettings } from '../hooks/useProjectionSettings';
 
 const DataContext = createContext(null);
 
@@ -45,6 +46,7 @@ export function DataProvider({ children }) {
   const accountTypeFavorites = useAccountTypeFavorites();
   const subCategories = useSubCategories();
   const chitFunds = useChitFunds();
+  const projectionSettings = useProjectionSettings();
 
   // Auto-provision any tab this app needs that doesn't exist yet (e.g. a brand
   // new tab introduced in this release, like MonthlyPlans/NetWorthSnapshots) -
@@ -59,6 +61,7 @@ export function DataProvider({ children }) {
       .then(() => {
         monthly.refresh();
         netWorth.refresh();
+        projectionSettings.refresh();
       })
       .catch((err) => console.error('Failed to auto-provision sheet tabs:', err));
   }, [token]);
@@ -66,7 +69,7 @@ export function DataProvider({ children }) {
   return (
     <DataContext.Provider value={{
       cashBook, vendors, projects, emiLoans, handLoans, creditCards, lists, accountSettings,
-      monthly, netWorth, accountTypeFavorites, subCategories, chitFunds,
+      monthly, netWorth, accountTypeFavorites, subCategories, chitFunds, projectionSettings,
     }}>
       {children}
     </DataContext.Provider>

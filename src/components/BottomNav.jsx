@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { BookOpen, Users, FolderKanban, CreditCard, LayoutDashboard, Menu, X, CalendarRange, TrendingUp, Settings } from 'lucide-react';
+import { BookOpen, Users, FolderKanban, CreditCard, LayoutDashboard, Menu, X, CalendarRange, TrendingUp, Settings, LineChart } from 'lucide-react';
 
 const tabs = [
   { to: '/cashbook', icon: BookOpen, label: 'CashBook' },
@@ -12,6 +12,7 @@ const tabs = [
 
 const moreLinks = [
   { to: '/projects', icon: FolderKanban, label: 'Projects' },
+  { to: '/projections', icon: LineChart, label: 'Projections' },
   { to: '/networth', icon: TrendingUp, label: 'Net Worth' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];

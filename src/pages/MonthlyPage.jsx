@@ -4,16 +4,15 @@ import {
   computeMonthlyActuals, computeActualForPlan, computeActualForTransferPlan,
   computeTypeSpendBreakdown, computeSubCategorySpendBreakdown, computePlannedBreakdown,
   computeAccountSpendBreakdown, computeTypeSpendBreakdownForAccount, computeAccountSpendBreakdownForType,
-  findNearMissForZeroActual, computeCombinedProjectSpend,
+  findNearMissForZeroActual,
 } from '../utils/aggregations';
-import { projectPayoffPlan } from '../utils/debtAvalancheProjection';
 import { formatCurrency, getTodayISO, shiftMonth, monthLabel } from '../utils/formatters';
 import Dropdown from '../components/Dropdown';
 import PieChart from '../components/PieChart';
 import BarChart from '../components/BarChart';
 import Toast from '../components/Toast';
 import LoadingSkeleton from '../components/LoadingSkeleton';
-import { ChevronLeft, ChevronRight, Plus, X, Trash2, Settings2, ArrowLeft, Download, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, X, Trash2, Settings2, ArrowLeft, Download, AlertTriangle } from 'lucide-react';
 
 const SECTIONS = ['Income', 'My Outflows', 'Wife Outflows', 'Projects'];
 
@@ -30,18 +29,6 @@ const effectiveSection = (p) => (p.category === 'TRANSFER' ? 'Transfers' : p.sec
 function accountLabel(item) {
   if (item.account && item.toAccount) return `${item.account} \u2192 ${item.toAccount}`;
   return item.account || '';
-}
-
-/**
- * "Oct 2026" - month and year only, no day. Used for the Debt Payoff
- * Trajectory's projected dates, where the day-of-month is just whatever
- * the simulation's internal date arithmetic landed on (it keeps today's
- * day-of-month for every projected month) and isn't meaningful to show.
- */
-function formatMonthYear(dateStr) {
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return dateStr;
-  return date.toLocaleString('en', { month: 'short', year: 'numeric' });
 }
 
 function PlanForm({
@@ -318,16 +305,12 @@ function LoadTemplateModal({ template, monthPlans, onLoad, onClose }) {
 }
 
 export default function MonthlyPage() {
-  const { monthly, cashBook, lists, handLoans, emiLoans, projects, vendors, chitFunds, accountSettings, creditCards } = useAppData();
+  const { monthly, cashBook, lists } = useAppData();
   const [month, setMonth] = useState(getTodayISO().slice(0, 7));
   const [showForm, setShowForm] = useState(false);
   const [editingPlan, setEditingPlan] = useState(null);
   const [showTemplate, setShowTemplate] = useState(false);
   const [showLoadTemplate, setShowLoadTemplate] = useState(false);
-  // Collapsed by default - this is a heavy simulation section, moved to the
-  // bottom of the page and hidden until asked for, so it doesn't dominate
-  // the page above the more commonly-used Categories/breakdown sections.
-  const [showPayoffTrajectory, setShowPayoffTrajectory] = useState(false);
   // Actual Breakdown pie: top-level grouping (Type, the original behavior,
   // or Account - "how much came out of W-HDFC this month") plus a drilled-in
   // slice label. When grouped by Type, drillMode additionally picks which
@@ -407,69 +390,6 @@ export default function MonthlyPage() {
   const currentBalance = cashBook.totalBalance;
   const totalAvailablePlanned = currentBalance + plannedSavings;
   const totalAvailableActual = currentBalance + actualSavings;
-
-  // Debt Payoff Trajectory - only items with a Payoff Priority set
-  // participate (see debtAvalancheProjection.js / bugs-and-lessons.md §44).
-  // Lend-direction Hand Loans are excluded here (not the engine's job) -
-  // this projection is about paying down obligations/funding commitments,
-  // not chasing repayment of money lent out.
-  const payoffHandLoans = handLoans.debts
-    .filter((l) => l.status !== 'Closed' && l.payoffPriority != null)
-    .map((l) => {
-      const state = handLoans.getLoanState(l);
-      return {
-        name: l.name, priority: l.payoffPriority,
-        outstandingPrincipal: state.outstandingPrincipal,
-        accruedInterestSoFar: state.accruedInterest,
-        annualRate: l.annualRate,
-      };
-    });
-  const payoffEMILoans = emiLoans.loans
-    .filter((l) => l.status !== 'Closed' && !l.emiStatus?.isComplete && l.payoffPriority != null)
-    .map((l) => ({
-      name: l.name, priority: l.payoffPriority,
-      outstandingBalance: l.emiStatus?.outstandingBalance ?? l.principal,
-      annualRate: l.annualRate, emi: l.emiStatus?.emi ?? 0,
-      remainingMonths: l.emiStatus?.installmentsRemaining ?? 0,
-    }));
-  const payoffProjects = projects.projects
-    .filter((p) => p.status !== 'Completed' && !p.endDateActual && p.payoffPriority != null)
-    .map((p) => ({
-      name: p.name || p.code, priority: p.payoffPriority,
-      remainingBudget: Math.max(0, p.budget - computeCombinedProjectSpend(vendors.rows, cashBook.rows, p.code)),
-      endDatePlanned: p.endDatePlanned || null,
-    }));
-  // Chit Funds don't get a Payoff Priority or join the priority-ordered
-  // list themselves - they only ever *free up* surplus once their known
-  // remaining contribution months elapse (see debtAvalancheProjection.js's
-  // activeChits doc for why winning/maturity timing is still excluded).
-  const activeChits = chitFunds.chits
-    .filter((c) => c.status !== 'Closed' && !c.isComplete)
-    .map((c) => ({ name: c.name, monthlyContribution: c.monthlyContribution, monthsRemaining: c.monthsRemaining }));
-  // One-time starting lump sum for month 1 only: current balance sitting
-  // above each account's own Min Balance buffer (the exact same
-  // `balance - minBalance` pattern computeUpcomingEMIFundingWarnings
-  // already uses) - cash already available today that isn't earmarked for
-  // anything else, distinct from the recurring monthlySurplus below.
-  const startingLumpSum = Array.from(cashBook.accountBalances.entries())
-    .reduce((sum, [account, balance]) => sum + Math.max(0, balance - (accountSettings.minBalances.get(account) || 0)), 0);
-  // Credit Cards otherwise never appear in this projection at all (assumed
-  // always paid in full monthly, per the original design) - but an
-  // already-billed, not-yet-paid statement is a real, already-committed
-  // near-term outflow, not a hypothetical one, so its remaining amount is
-  // deducted from whichever month it's actually due in (never repeated,
-  // and never turns into a priority-ordered target the way Hand/EMI Loans
-  // and Projects are - it's a one-time pool reduction, nothing more).
-  const oneTimeExpenses = creditCards.cards
-    .filter((c) => c.latestBill && c.outstanding > 0)
-    .map((c) => ({ name: `${c.name} bill`, amount: c.outstanding, dueDate: c.latestBill.dueDate }));
-  const hasPayoffItems = payoffHandLoans.length > 0 || payoffEMILoans.length > 0 || payoffProjects.length > 0;
-  const payoffPlan = hasPayoffItems
-    ? projectPayoffPlan({
-        handLoans: payoffHandLoans, emiLoans: payoffEMILoans, projects: payoffProjects, activeChits, oneTimeExpenses,
-        monthlySurplus: Math.max(0, plannedSavings), startingLumpSum, startDate: getTodayISO(),
-      })
-    : null;
 
   // Actual spending breakdown pie chart - top level is either Type (e.g.
   // tap "WANTS" to see Dining vs Shopping vs Entertainment) or Account
@@ -859,90 +779,6 @@ export default function MonthlyPage() {
           );
         })
       )}
-
-      {/* Debt Payoff Trajectory - a heavy simulation section, deliberately
-          moved to the bottom of the page and collapsed by default (tap to
-          expand) so it doesn't dominate the more commonly-used sections
-          above. Still always renders the card itself (not hidden entirely
-          behind hasPayoffItems) so the feature stays discoverable even
-          before anything has been opted in - see bugs-and-lessons.md §44. */}
-      <div className="bg-white rounded-2xl p-4 shadow-sm mb-4">
-        <button onClick={() => setShowPayoffTrajectory((v) => !v)}
-          className="w-full flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-500">Debt Payoff Trajectory</h2>
-          {showPayoffTrajectory ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
-        </button>
-
-        {showPayoffTrajectory && (
-          !hasPayoffItems || !payoffPlan ? (
-            <p className="text-sm text-gray-400 mt-2">
-              Set a Payoff Priority on a Hand Loan, EMI Loan, or Project (edit it, look for the "Payoff Priority"
-              field) to include it here and see when it's projected to clear.
-            </p>
-          ) : (
-          <>
-            <div className="space-y-0.5 mt-2 mb-3">
-              <p className="text-xs text-gray-400">
-                Assumes {formatCurrency(Math.max(0, plannedSavings))}/month (this month's Planned Savings) stays constant.
-              </p>
-              {startingLumpSum > 0 && (
-                <p className="text-xs text-gray-400">
-                  Plus a one-time {formatCurrency(startingLumpSum)} from current balances above each account's
-                  Min Balance, applied this month only.
-                </p>
-              )}
-              {activeChits.length > 0 && (
-                <p className="text-xs text-gray-400">
-                  Also assumes {activeChits.map((c) => c.name).join(', ')}'s contribution joins this pool once it
-                  ends (not its win/maturity amount or timing, which can't be predicted).
-                </p>
-              )}
-              {oneTimeExpenses.length > 0 && (
-                <p className="text-xs text-gray-400">
-                  Reserves {oneTimeExpenses.map((e) => `${formatCurrency(e.amount)} for ${e.name}`).join(', ')} in
-                  its due month(s), since Credit Cards are otherwise assumed always paid in full.
-                </p>
-              )}
-            </div>
-
-            {payoffPlan.neverCompletes ? (
-              <p className="text-sm text-danger">Does not clear within {payoffPlan.months.length} months at this pace.</p>
-            ) : (
-              <div className="space-y-1 mb-3">
-                {payoffPlan.milestones
-                  .slice()
-                  .sort((a, b) => a.clearedMonth - b.clearedMonth)
-                  .map((m) => (
-                    <p key={m.itemName} className="text-sm text-gray-700">
-                      <span className="font-medium text-gray-900">{m.itemName}</span> clears: Month {m.clearedMonth} ({formatMonthYear(m.clearedDate)})
-                    </p>
-                  ))}
-                <p className="text-sm font-semibold text-success">
-                  All cleared: Month {payoffPlan.allClearMonth} ({formatMonthYear(payoffPlan.months[payoffPlan.allClearMonth - 1].date)})
-                </p>
-              </div>
-            )}
-
-            <details className="mt-2">
-              <summary className="text-xs text-primary font-medium cursor-pointer">Show full month-by-month table</summary>
-              <div className="mt-2 max-h-80 overflow-y-auto space-y-3">
-                {payoffPlan.months.map((month, i) => (
-                  <div key={i} className="border-b border-gray-100 pb-2">
-                    <p className="text-xs font-semibold text-gray-500">Month {i + 1} - {formatMonthYear(month.date)}</p>
-                    {Object.entries(month.extraPaymentApplied).map(([name, amt]) => (
-                      <p key={name} className="text-xs text-gray-600 flex justify-between">
-                        <span>{name}: +{formatCurrency(amt)} applied</span>
-                        <span>{formatCurrency(month.remaining[name] || 0)} left</span>
-                      </p>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </details>
-          </>
-          )
-        )}
-      </div>
 
       {showForm && (
         <PlanForm

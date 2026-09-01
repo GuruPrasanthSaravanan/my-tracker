@@ -27,4 +27,9 @@ export const SHEET_SCHEMAS = {
   SubCategories: ['Type', 'SubCategory'],
   ChitFunds: ['Name', 'TotalValue', 'MonthlyContribution', 'DurationMonths', 'StartDate', 'ForemanCommissionPercent', 'DebitsFrom', 'Status', 'Notes'],
   ChitFundMonths: ['ChitName', 'Month', 'ContributionPaid', 'DividendReceived', 'IsPrizedMonth', 'PrizeAmountReceived', 'Notes'],
+  // Single-row settings tab for the Projections page - a stable, manually-set
+  // "typical" monthly figure, deliberately decoupled from whatever this
+  // specific month's Monthly Plan happens to say (which can be skewed by a
+  // one-off Project expense or irregular income) - see bugs-and-lessons.md.
+  ProjectionSettings: ['TypicalMonthlyIncome', 'TypicalMonthlyExpenses'],
 };

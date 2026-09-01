@@ -270,23 +270,35 @@ export default function ObligationsPage() {
         // A Transfer, not a plain single-leg entry: the original card
         // spend already logged Money OUT against the card's own pseudo-
         // account (Account=card name), dropping its balance negative -
-        // paying the bill just settles that balance back up, it isn't a
-        // *second* expense. A plain `addEntry` here (Money OUT from the
-        // real account only, nothing crediting the card back) would
-        // double-count the same spend in totalBalance: once when the card
-        // went negative, again when the real account dropped to pay it -
-        // see bugs-and-lessons.md for the trace that caught this. Using
-        // addTransfer also correctly excludes it from Planned/Actual
-        // Income-Outflow accounting (Type=TRANSFER), same as any other
-        // self-transfer between your own accounts - the real "outflow"
-        // was already counted once, under whatever category the original
-        // swipe used.
+        // paying the bill just settles that balance back up. A plain
+        // `addEntry` here (Money OUT from the real account only, nothing
+        // crediting the card back) would double-count the same spend in
+        // totalBalance: once when the card went negative, again when the
+        // real account dropped to pay it - see bugs-and-lessons.md for
+        // the trace that caught this.
+        //
+        // The outgoing leg is tagged Type='CC' (not 'TRANSFER') though,
+        // deliberately - unlike a pure self-transfer, this *is* a real,
+        // plannable monthly cash-flow event the user wants to budget for
+        // (same reasoning as EMI/DEBT-REPAYMENT already being real
+        // Planned/Actual categories, not Transfers) - Monthly's
+        // Planned-vs-Actual tracking is a cash-flow-timing view, not a
+        // "did this rupee already get counted once this year" view, so
+        // it's correct for a 'CC' Monthly Plan category to reflect this
+        // payment even though the underlying purchase was already
+        // counted once under its own category (Dining, Wants, etc.) at
+        // swipe time - those are two different, both-legitimate
+        // questions Monthly and the Debt Payoff Trajectory now each
+        // answer separately. The incoming leg stays Type='TRANSFER' so
+        // it's still excluded from computeCashBookSpendForAccount's
+        // "next bill" projection.
         await cashBook.addTransfer({
           date: entry.paymentDate || entry.dueDate,
           fromAccount: entry.cashBookAccount,
           toAccount: entry.cardName,
           amount: entry.newPaymentAmount,
           description: `${entry.cardName} - bill payment`,
+          fromType: 'CC',
         });
       }
       setShowBillForm(false);

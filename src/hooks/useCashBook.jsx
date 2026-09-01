@@ -61,14 +61,25 @@ export function useCashBook() {
    * matched pair of rows (Money Out from `fromAccount`, Money In to
    * `toAccount`) written in a single atomic batch request, so the two legs
    * can't end up half-written if one write succeeded and the other failed.
+   *
+   * Both legs default to Type=TRANSFER (excluded from Planned/Actual
+   * Income-Outflow accounting, same as any plain self-transfer) - but
+   * `fromType`/`toType` let a caller override either leg's Type
+   * individually. This matters for settling a "virtual account" balance
+   * (e.g. paying a Credit Card bill, see ObligationsPage.jsx's
+   * handleSaveBill): the outgoing leg is a real, plannable cash-flow
+   * event worth tracking under its own category (Type='CC'), while the
+   * incoming leg (crediting the card's balance back up) still needs to
+   * stay excluded from things like computeCashBookSpendForAccount's
+   * "next bill" projection, which only Type=TRANSFER guarantees today.
    */
-  const addTransfer = useCallback(async ({ date, fromAccount, toAccount, amount, description }) => {
+  const addTransfer = useCallback(async ({ date, fromAccount, toAccount, amount, description, fromType = 'TRANSFER', toType = 'TRANSFER' }) => {
     const desc = description || `Transfer: ${fromAccount} to ${toAccount}`;
     const outRow = rows.length + 2;
     const inRow = rows.length + 3;
     await batchUpdateRows(token, [
-      { range: `CashBook!A${outRow}:F${outRow}`, values: [date, desc, fromAccount, 'TRANSFER', '', amount] },
-      { range: `CashBook!A${inRow}:F${inRow}`, values: [date, desc, toAccount, 'TRANSFER', amount, ''] },
+      { range: `CashBook!A${outRow}:F${outRow}`, values: [date, desc, fromAccount, fromType, '', amount] },
+      { range: `CashBook!A${inRow}:F${inRow}`, values: [date, desc, toAccount, toType, amount, ''] },
     ]);
     await fetchData();
   }, [token, fetchData, rows]);
