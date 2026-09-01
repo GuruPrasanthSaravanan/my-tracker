@@ -39,7 +39,12 @@ export function useProjects() {
     await fetchData();
   }, [token, fetchData, projects]);
 
-  const editProject = useCallback(async (rowIndex, entry) => {
+  // `skipRefresh` lets a caller writing several projects back-to-back (e.g.
+  // PriorityOrderManager's savePriorityOrder) skip the full-tab refetch
+  // after every single write and do just one at the end instead - without
+  // it, saving N projects triggers N sequential refetches, each causing an
+  // intermediate re-render (visible as UI flicker) before settling.
+  const editProject = useCallback(async (rowIndex, entry, { skipRefresh = false } = {}) => {
     const sheetRow = rowIndex + 2;
     const values = [
       entry.code, entry.name, entry.budget || '',
@@ -48,7 +53,7 @@ export function useProjects() {
       entry.manager || '', entry.status || '', entry.notes || '', entry.payoffPriority || '',
     ];
     await updateRow(token, `Projects!A${sheetRow}:N${sheetRow}`, values);
-    await fetchData();
+    if (!skipRefresh) await fetchData();
   }, [token, fetchData]);
 
   const addMilestone = useCallback(async (entry) => {

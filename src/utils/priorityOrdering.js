@@ -71,11 +71,17 @@ export function buildPriorityOrderItems({ handLoans = [], emiLoans = [], project
  * @param {{ handLoans: object, emiLoans: object, projects: object }} hooks - the useAppData() hook objects
  */
 export async function savePriorityOrder(included, excluded, { handLoans, emiLoans, projects }) {
+  // Every write below passes skipRefresh - without it, each hook's own
+  // editLoan/editProject triggers a full-tab refetch immediately, so
+  // reordering N items would refetch N times in a row, each one causing
+  // an intermediate re-render (visible as UI flicker) before things
+  // settle. Doing all the writes first and refreshing once at the end
+  // instead means exactly one re-render once everything is consistent.
   const writeOne = async (kind, rowIndex, data, priority) => {
     const entry = { ...data, payoffPriority: priority };
-    if (kind === 'hand') await handLoans.editLoan(rowIndex, entry);
-    else if (kind === 'emi') await emiLoans.editLoan(rowIndex, entry);
-    else if (kind === 'project') await projects.editProject(rowIndex, entry);
+    if (kind === 'hand') await handLoans.editLoan(rowIndex, entry, { skipRefresh: true });
+    else if (kind === 'emi') await emiLoans.editLoan(rowIndex, entry, { skipRefresh: true });
+    else if (kind === 'project') await projects.editProject(rowIndex, entry, { skipRefresh: true });
   };
   for (const [index, item] of included.entries()) {
     await writeOne(item.kind, item.rowIndex, item.data, index + 1);
@@ -83,4 +89,5 @@ export async function savePriorityOrder(included, excluded, { handLoans, emiLoan
   for (const item of excluded) {
     if (item.priority != null) await writeOne(item.kind, item.rowIndex, item.data, null);
   }
+  await Promise.all([handLoans.refresh(), emiLoans.refresh(), projects.refresh()]);
 }

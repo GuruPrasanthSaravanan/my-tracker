@@ -49,7 +49,12 @@ export function useEMILoans() {
     await fetchData();
   }, [token, fetchData, rows]);
 
-  const editLoan = useCallback(async (rowIndex, entry) => {
+  // `skipRefresh` lets a caller writing several loans back-to-back (e.g.
+  // PriorityOrderManager's savePriorityOrder) skip the full-tab refetch
+  // after every single write and do just one at the end instead - without
+  // it, saving N loans triggers N sequential refetches, each causing an
+  // intermediate re-render (visible as UI flicker) before settling.
+  const editLoan = useCallback(async (rowIndex, entry, { skipRefresh = false } = {}) => {
     const sheetRow = rowIndex + 2;
     const values = [
       entry.name, entry.principal, entry.annualRate, entry.tenureMonths,
@@ -57,7 +62,7 @@ export function useEMILoans() {
       entry.emiDate || '', entry.actualEMI || '', entry.payoffPriority || '',
     ];
     await updateRow(token, `EMILoans!A${sheetRow}:K${sheetRow}`, values);
-    await fetchData();
+    if (!skipRefresh) await fetchData();
   }, [token, fetchData]);
 
   const deleteLoan = useCallback(async (rowIndex) => {
