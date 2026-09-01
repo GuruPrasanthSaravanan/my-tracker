@@ -266,9 +266,27 @@ export default function ObligationsPage() {
         // newPaymentAmount) - not the whole running Payment Made total -
         // so a follow-up edit that adds a top-up payment doesn't re-log
         // the portion already logged from an earlier save.
-        await cashBook.addEntry({
-          date: entry.paymentDate || entry.dueDate, description: `${entry.cardName} - bill payment`,
-          account: entry.cashBookAccount, type: 'CC', moneyOut: entry.newPaymentAmount,
+        //
+        // A Transfer, not a plain single-leg entry: the original card
+        // spend already logged Money OUT against the card's own pseudo-
+        // account (Account=card name), dropping its balance negative -
+        // paying the bill just settles that balance back up, it isn't a
+        // *second* expense. A plain `addEntry` here (Money OUT from the
+        // real account only, nothing crediting the card back) would
+        // double-count the same spend in totalBalance: once when the card
+        // went negative, again when the real account dropped to pay it -
+        // see bugs-and-lessons.md for the trace that caught this. Using
+        // addTransfer also correctly excludes it from Planned/Actual
+        // Income-Outflow accounting (Type=TRANSFER), same as any other
+        // self-transfer between your own accounts - the real "outflow"
+        // was already counted once, under whatever category the original
+        // swipe used.
+        await cashBook.addTransfer({
+          date: entry.paymentDate || entry.dueDate,
+          fromAccount: entry.cashBookAccount,
+          toAccount: entry.cardName,
+          amount: entry.newPaymentAmount,
+          description: `${entry.cardName} - bill payment`,
         });
       }
       setShowBillForm(false);

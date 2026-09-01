@@ -351,6 +351,23 @@ describe('computeCashBookSpendForAccount', () => {
     expect(result.spend).toBe(0);
   });
 
+  it("excludes a bill-payment Transfer's incoming leg to the card - it isn't a real refund, just settling the balance", () => {
+    // See ObligationsPage.jsx's handleSaveBill: a bill payment logs a
+    // Transfer (Money OUT from the real account, Money IN to the card) so
+    // Total Balance isn't double-counted - but that Money IN leg must not
+    // be treated as a "refund" here, or paying a bill would incorrectly
+    // shrink the *next* cycle's projected spend.
+    const rowsWithPayment = [
+      ['2026-08-01', 'Groceries', 'Card', 'Shopping', '', '2000'],
+      ['2026-08-20', 'Card - bill payment', 'Card', 'TRANSFER', '5000', ''],
+      ['2026-08-25', 'Fuel', 'Card', 'Fuel', '', '1000'],
+    ];
+    const result = computeCashBookSpendForAccount(rowsWithPayment, 'Card', null, '2026-08-31');
+    // Only the two real purchases count - the Transfer leg is excluded entirely.
+    expect(result.spend).toBe(3000);
+    expect(result.transactionCount).toBe(2);
+  });
+
   it('skips rows with missing or unparseable dates instead of throwing', () => {
     const messyRows = [
       ['', 'No date', 'Card', 'Shopping', '', '1000'],

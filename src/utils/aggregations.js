@@ -545,6 +545,13 @@ export function computeCashBookSpendForAccount(rows, accountName, fromDate = nul
 
   for (const row of rows) {
     if ((row[2] || '') !== accountName) continue;
+    // A bill-payment Transfer's incoming leg (settling the card's balance
+    // back up, see ObligationsPage.jsx's handleSaveBill) also lands on
+    // this account - excluding it here keeps this purely a projection of
+    // *new purchases/refunds* since the last statement, not muddied by a
+    // payment that isn't a real refund (it's just moving money already
+    // counted as spend under whatever category the original purchase used).
+    if ((row[3] || '') === 'TRANSFER') continue;
     if (!row[0]) continue;
     const date = new Date(row[0]);
     if (Number.isNaN(date.getTime())) continue;
